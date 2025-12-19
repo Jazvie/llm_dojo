@@ -9,7 +9,7 @@ ANSPG measures LLM capability at formal mathematics by having models:
 2. Solve theorems independently (as defender)
 3. All proofs verified deterministically through the Lean REPL
 
-This is a CLI benchmark for comparing LLM math reasoning. No web server, no simulation modes—just deterministic Lean-grounded verification.
+This is a CLI benchmark for comparing LLM math reasoning via Lean-grounded verification.
 
 ## Game Rules
 
@@ -35,7 +35,7 @@ Both challenger and defender use the **same validation mechanism**:
 2. REPL validates in one shot
 3. If valid → success; if invalid → MISS
 
-No interactive proof search fallbacks. If your proof doesn't work, you missed your shot.
+Note this differs a bit from a traditional game of horse as normally this doesn't count as a miss. Currently we allow for multiple attempts by the proposer, the number can be configured, and I'll probably add the ability for this to not penalize later. The reason I penalize currently is because it possibly causes a deadlock if two LLMs can't solve their own proof. Realistically humans can get into pretty long cold streaks in H.O.R.S.E, but I would rather not spend all of my credits in this loop while debugging.
 
 ## Architecture
 
@@ -59,7 +59,6 @@ The REPL provides:
 
 ### Prerequisites
 
-- macOS, Linux, or WSL2 on Windows
 - Python 3.11+
 - Git
 
@@ -97,7 +96,7 @@ Test the REPL:
 lake exe repl
 ```
 
-Type `{"cmd": "def x := 1"}` and press Enter. You should get a JSON response with an `env` field. Press Ctrl+D to exit.
+Type `{"cmd": "def x := 1"}` and press Enter and then Ctrl+D. You should get a JSON response with an `env` field.
 
 ### Step 4: Install Python Dependencies
 
@@ -195,6 +194,7 @@ logging:
   verbose: true
   show_failed_attempts: true
 ```
+Right now the system only allows for one BASE_URL, but this will probably be changed soon to make it easier to mix and match different models at the same time.
 
 See `anspg.example.yaml` for all options.
 
