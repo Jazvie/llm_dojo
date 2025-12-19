@@ -1,0 +1,35 @@
+# ANSPG Configuration Example
+# Copy this to anspg.yaml and customize for your battles
+
+# Game settings
+game:
+  time_limit_s: 300      # Time limit per turn (seconds)
+  max_turns: 10          # Maximum number of turns before game ends
+  rulebook: mathlib      # Rulebook: basic, mathlib, competition
+
+# Default settings for all agents (can be overridden per-agent)
+agent_defaults:
+  temperature: 0.3             # LLM temperature (0 = deterministic, 1 = creative)
+  max_tokens: 500              # Maximum tokens in LLM response
+  difficulty_target: 0.4       # Target difficulty (0 = trivial, 1 = very hard)
+  max_conjecture_attempts: 5   # Retries when theorem generation fails
+
+# Per-agent configuration (inherits from agent_defaults)
+agents:
+  agent_a:
+    name: GPT-4o-Mini
+    model: gpt-4o-mini
+    # Override defaults for this agent:
+    temperature: 0.5
+    difficulty_target: 0.6
+  
+  agent_b:
+    name: Claude-Sonnet
+    model: claude-3-5-sonnet-20241022
+    # Uses agent_defaults for other settings
+
+# Logging and debugging
+logging:
+  verbose: true               # Show detailed proof steps and errors (enabled by default)
+  show_failed_attempts: true  # Show why shot attempts failed
+  show_proof_details: false   # Show full tactic sequences
