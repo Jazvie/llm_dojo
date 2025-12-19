@@ -1,3 +1,6 @@
+<img src="img/the_horse_turned_groom.jpg" style="display: block; margin: 30 auto;" />
+
+
 # ANSPG - Adversarial Neuro-Symbolic Proving Ground
 
 A H.O.R.S.E.-style theorem proving game where two AI agents compete by proposing and solving Lean 4 theorems, with deterministic verification via the Lean REPL.
@@ -48,7 +51,7 @@ LLM Agent A  <->  REPL Referee  <->  LLM Agent B
 
 **Why REPL instead of LeanDojo?**
 
-LeanDojo requires theorems to exist in a pre-traced repository. Our game generates novel theorems dynamically, which LeanDojo cannot verify. The Lean REPL can execute arbitrary Lean code including new theorems.
+LeanDojo requires theorems to exist in a pre-traced repository which may be a little slow.
 
 The REPL provides:
 - **Inject Syntax**: Submit arbitrary theorem strings and receive immediate feedback
@@ -368,3 +371,5 @@ pip install -e .
 - [Lean 4](https://leanprover.github.io/lean4/doc/) - Theorem prover
 - [leanprover-community/repl](https://github.com/leanprover-community/repl) - Lean REPL
 - [Pantograph](https://github.com/lenianiva/Pantograph) - Advanced REPL interface
+
+
