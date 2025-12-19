@@ -49,9 +49,7 @@ LLM Agent A  <->  REPL Referee  <->  LLM Agent B
    theorems    Lean execution          theorems
 ```
 
-**Why REPL instead of LeanDojo?**
-
-LeanDojo requires theorems to exist in a pre-traced repository which may be a little slow.
+LeanDojo requires theorems to exist in a pre-traced repository which may be a little slow so ultimately we don't use it here.
 
 The REPL provides:
 - **Inject Syntax**: Submit arbitrary theorem strings and receive immediate feedback
