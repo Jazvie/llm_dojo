@@ -246,7 +246,6 @@ def create_llm_client(
     base_url: str | None = None,
     model: str | None = None,
 ) -> LLMClient:
-    # Respect explicit args first, then fall back to env defaults
     return LLMClient(
         api_key=api_key,
         base_url=base_url,

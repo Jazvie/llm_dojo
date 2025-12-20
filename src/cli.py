@@ -108,7 +108,6 @@ def battle(
         )
     )
 
-    # Load configuration (file or defaults)
     config, config_path = load_config(config_file)
 
     # CLI arguments override config file
@@ -244,7 +243,6 @@ async def _run_battle(
     if verbose:
         console.print(f"[dim]Available tactics: {len(rulebook.tactics.all_names())}[/dim]")
 
-    # Initialize REPL referee
     console.print("\n[dim]Initializing Lean REPL (this may take a moment for Mathlib)...[/dim]")
 
     referee = REPLReferee(
@@ -265,7 +263,7 @@ async def _run_battle(
         console.print("[dim]Make sure Lean 4 and the REPL are properly installed[/dim]")
         raise typer.Exit(1)
 
-    # Create LLM clients
+    #TODO: ALLOW DIFFERENT URLS FOR OTHER LLMs
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("ANSPG_LLM_API_KEY")
     base_url = os.getenv("OPENAI_BASE_URL") or os.getenv("ANSPG_LLM_BASE_URL")
 
@@ -274,7 +272,7 @@ async def _run_battle(
         await referee.close()
         raise typer.Exit(1)
 
-    # Detect OpenRouter keys
+    # Detect OpenRouter keys. will add more functionality later. I am just hardcoding this for now as this is what I test with.
     if api_key.startswith("sk-or-") and not base_url:
         console.print("[yellow]OpenRouter key detected, setting base_url[/yellow]")
         base_url = "https://openrouter.ai/api/v1"

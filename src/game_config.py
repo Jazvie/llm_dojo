@@ -76,7 +76,7 @@ class AgentConfig:
 
     # Conjecture/proof settings
     difficulty_target: float = 0.4  # 0 = trivial, 1 = very hard
-    max_conjecture_attempts: int = 5  # Retries for generating valid theorems
+    max_conjecture_attempts: int = 3  # Retries for generating valid theorems
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], defaults: AgentConfig | None = None) -> AgentConfig:
@@ -103,7 +103,7 @@ class AgentConfig:
 class LoggingConfig:
     """Logging configuration."""
 
-    verbose: bool = True  # On by default for better debugging
+    verbose: bool = True  # On by default for better debugging. should be turned off later
     show_failed_attempts: bool = True
     show_proof_details: bool = False
 

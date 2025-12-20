@@ -49,7 +49,7 @@ class HorseAgentConfig:
 
     # Conjecture settings (challenger)
     difficulty_target: float = 0.4  # 0 = trivial, 1 = very hard
-    max_conjecture_attempts: int = 5  # Retries for generating a valid theorem
+    max_conjecture_attempts: int = 3  # Retries for generating a valid theorem
 
 
 @dataclass
@@ -192,7 +192,7 @@ CRITICAL RULES:
 
         NOTE: Each attempt is ONE SHOT. If the proof fails, we try a
         DIFFERENT theorem, not a different proof for the same theorem.
-        That's fair - you can't keep shooting until you make it.
+        TODO: ALLOW MULTIPLE ATTEMPTS PER THEOREM TO ALLOW FOR SMALL FIXES, SHOT ATTEMPTS CONSTRASIN THE ABUSE OF THIS.
 
         Returns:
             A Shot with validated proof, or None if all attempts fail
@@ -339,11 +339,11 @@ CRITICAL RULES:
 
         previous_section = ""
         if previous_failures:
-            recent = previous_failures[-3:]  # Show last 3 failures
+            recent = previous_failures#[-3:]  # Show last 3 failures
             previous_section = (
                 "Previous attempts failed:\n"
                 + "\n".join(f"  - {f}" for f in recent)
-                + "\n\nPlease try a DIFFERENT theorem."
+                #+ "\n\nPlease try a DIFFERENT theorem."
             )
 
         prompt = self.CONJECTURE_PROMPT.format(
