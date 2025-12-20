@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +55,38 @@ except ImportError:
     yaml = None  # type: ignore
 
 
+class SimpPolicy(Enum):
+    """
+    Policy for handling `simp` and other automation tactics.
+
+    Controls whether agents can "abuse" simp to propose trivial theorems.
+
+    Options:
+    - ALLOWED: No restrictions on simp (default, good for beginners)
+    - NO_AUTO_SIMP: Theorems that can be solved by simp alone are rejected.
+                    Forces challengers to propose non-trivial theorems.
+                    simp can still be used as part of larger proofs.
+    - BANNED: simp and related automation tactics are removed from the rulebook.
+              Forces fully manual proofs (hardcore mode).
+    """
+
+    ALLOWED = "allowed"
+    NO_AUTO_SIMP = "no_auto_simp"
+    BANNED = "banned"
+
+    @classmethod
+    def from_string(cls, value: str | None) -> SimpPolicy:
+        """Parse from string, defaulting to ALLOWED."""
+        if value is None:
+            return cls.ALLOWED
+        value_lower = value.lower().replace("-", "_")
+        for policy in cls:
+            if policy.value == value_lower:
+                return policy
+        # Fallback to ALLOWED if unrecognized
+        return cls.ALLOWED
+
+
 @dataclass
 class GameConfig:
     """Game-level configuration."""
@@ -61,6 +94,7 @@ class GameConfig:
     time_limit_s: int = 300
     max_turns: int = 10
     rulebook: str = "mathlib"
+    simp_policy: SimpPolicy = SimpPolicy.ALLOWED
 
 
 @dataclass
@@ -137,6 +171,7 @@ class ANSPGConfig:
             time_limit_s=game_data.get("time_limit_s", 300),
             max_turns=game_data.get("max_turns", 10),
             rulebook=game_data.get("rulebook", "mathlib"),
+            simp_policy=SimpPolicy.from_string(game_data.get("simp_policy")),
         )
 
         # Parse agent defaults
@@ -174,6 +209,7 @@ class ANSPGConfig:
                 "time_limit_s": self.game.time_limit_s,
                 "max_turns": self.game.max_turns,
                 "rulebook": self.game.rulebook,
+                "simp_policy": self.game.simp_policy.value,
             },
             "agent_defaults": {
                 "temperature": self.agent_defaults.temperature,

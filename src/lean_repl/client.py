@@ -331,6 +331,17 @@ class LeanREPLClient:
                     raise LeanError(parse_lean_error(response.error_message))
                 self._state.imports.append(imp)
 
+        # Disable autoImplicit to get clear "unknown identifier" errors instead of
+        # Lean silently treating typos (e.g., `length` instead of `List.length`) as
+        # implicit variables, which produces confusing type errors.
+        if self._verbose:
+            print("[REPL] Disabling autoImplicit...")
+        response = await self._send_command("set_option autoImplicit false")
+        if response.has_error:
+            # Non-fatal: log but continue
+            if self._verbose:
+                print(f"[REPL] Warning: Could not disable autoImplicit: {response.error_message}")
+
         return True
 
     async def enter_theorem(

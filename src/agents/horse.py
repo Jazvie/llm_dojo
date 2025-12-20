@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
 from ..models import Shot, ProofAttempt, DuplicateStatementTracker
 from ..rulebook import Rulebook
+from ..game_config import SimpPolicy
 from .base import get_difficulty_guidance
 from .llm_client import LLMClient
 
@@ -60,6 +61,9 @@ class HorseAgentConfig:
     # Conjecture settings (challenger)
     difficulty_target: float = 0.4  # 0 = trivial, 1 = very hard
     max_conjecture_attempts: int = 3  # Retries for generating a valid theorem
+
+    # Simp policy (game-level setting passed down)
+    simp_policy: SimpPolicy = SimpPolicy.ALLOWED
 
 
 @dataclass
@@ -261,6 +265,17 @@ CRITICAL RULES:
             is_valid, error = await self._validate_proof(theorem_name, statement, tactics)
 
             if is_valid:
+                # Step 3: Triviality check (if NO_AUTO_SIMP policy is active)
+                # Reject theorems that can be solved by simp alone
+                if self.config.simp_policy == SimpPolicy.NO_AUTO_SIMP:
+                    trivial_name = f"trivial_check_{uuid4().hex[:4]}"
+                    is_trivial, _ = await self._validate_proof(trivial_name, statement, ["simp"])
+                    if is_trivial:
+                        previous_failures.append(
+                            f"Theorem too trivial (solvable by 'simp' alone): {statement[:50]}..."
+                        )
+                        continue
+
                 # Shot succeeded. Record the statement to prevent reuse across turns
                 if self._duplicate_tracker:
                     self._duplicate_tracker.record_statement(self.config.name, statement)

@@ -86,6 +86,12 @@ def battle(
     max_conjecture_attempts: int = typer.Option(
         None, "--max-attempts", help="Max conjecture attempts per shot (overrides config)"
     ),
+    simp_policy: str = typer.Option(
+        None,
+        "--simp-policy",
+        "-s",
+        help="Simp policy: allowed, no_auto_simp, banned (overrides config)",
+    ),
 ):
     """
     Run an LLM 1v1 battle grounded in Lean REPL.
@@ -101,7 +107,7 @@ def battle(
         export ANSPG_LEAN_PROJECT=./lean_project
         anspg battle --model-a gpt-4o --model-b claude-3-opus
     """
-    from .game_config import load_config
+    from .game_config import load_config, SimpPolicy
 
     console.print(
         Panel.fit(
@@ -118,6 +124,9 @@ def battle(
     final_time_limit = time_limit if time_limit is not None else config.game.time_limit_s
     final_max_turns = turns if turns is not None else config.game.max_turns
     final_verbose = verbose if verbose is not None else config.logging.verbose
+    final_simp_policy = (
+        SimpPolicy.from_string(simp_policy) if simp_policy is not None else config.game.simp_policy
+    )
 
     # Agent A config
     agent_a_config = config.get_agent_config("agent_a")
@@ -186,6 +195,7 @@ def battle(
     )
     console.print(f"  Time limit: {final_time_limit}s per turn")
     console.print(f"  Max turns: {final_max_turns}")
+    console.print(f"  Simp policy: {final_simp_policy.value}")
 
     asyncio.run(
         _run_battle(
@@ -197,6 +207,7 @@ def battle(
             time_limit_s=final_time_limit,
             max_turns=final_max_turns,
             verbose=final_verbose,
+            simp_policy=final_simp_policy,
         )
     )
 
@@ -210,6 +221,7 @@ async def _run_battle(
     time_limit_s: int,
     max_turns: int,
     verbose: bool,
+    simp_policy: "SimpPolicy",
 ):
     """
     Run an LLM battle with Lean REPL grounding.
@@ -225,12 +237,13 @@ async def _run_battle(
     from .orchestrator.repl_referee import REPLReferee
     from .agents.horse import HorseAgent, HorseAgentConfig
     from .agents.llm_client import create_llm_client
-    from .game_config import AgentConfig
+    from .game_config import AgentConfig, SimpPolicy
     from .models import DuplicateStatementTracker
     from .rulebook import (
         create_mathlib_rulebook,
         create_basic_rulebook,
         create_competition_rulebook,
+        apply_simp_ban,
     )
 
     # Extract names for convenience
@@ -246,6 +259,15 @@ async def _run_battle(
         rulebook = create_competition_rulebook()
     else:
         rulebook = create_mathlib_rulebook()
+
+    # Apply simp ban if policy requires it
+    if simp_policy == SimpPolicy.BANNED:
+        rulebook = apply_simp_ban(rulebook)
+        console.print("[yellow]Simp policy: BANNED - simp and related tactics removed[/yellow]")
+    elif simp_policy == SimpPolicy.NO_AUTO_SIMP:
+        console.print(
+            "[yellow]Simp policy: NO_AUTO_SIMP - theorems solvable by simp alone will be rejected[/yellow]"
+        )
 
     console.print(f"\n[dim]Using rulebook: {rulebook.name}[/dim]")
     if verbose:
@@ -309,6 +331,7 @@ async def _run_battle(
             max_tokens=agent_a_config.max_tokens,
             difficulty_target=agent_a_config.difficulty_target,
             max_conjecture_attempts=agent_a_config.max_conjecture_attempts,
+            simp_policy=simp_policy,
         ),
         duplicate_tracker=duplicate_tracker,
     )
@@ -324,6 +347,7 @@ async def _run_battle(
             max_tokens=agent_b_config.max_tokens,
             difficulty_target=agent_b_config.difficulty_target,
             max_conjecture_attempts=agent_b_config.max_conjecture_attempts,
+            simp_policy=simp_policy,
         ),
         duplicate_tracker=duplicate_tracker,
     )

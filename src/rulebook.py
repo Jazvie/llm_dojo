@@ -734,5 +734,42 @@ def create_custom_rulebook(
     )
 
 
+# Tactics to remove when simp is banned (all the "sledgehammers")
+SIMP_TACTICS = [
+    "simp",
+    "simp only",
+    "simp_all",
+    "aesop",
+    "decide",
+    "tauto",
+]
+
+
+def apply_simp_ban(rulebook: Rulebook) -> Rulebook:
+    """
+    Create a copy of the rulebook with simp and related automation tactics removed.
+
+    This is used when simp_policy is BANNED to force manual proofs.
+
+    Args:
+        rulebook: The original rulebook
+
+    Returns:
+        A new rulebook with simp tactics removed
+    """
+    from copy import deepcopy
+
+    new_rulebook = deepcopy(rulebook)
+
+    for tactic_name in SIMP_TACTICS:
+        if tactic_name in new_rulebook.tactics.tactics:
+            del new_rulebook.tactics.tactics[tactic_name]
+
+    new_rulebook.name = f"{rulebook.name}_no_simp"
+    new_rulebook.description = f"{rulebook.description} (simp banned)"
+
+    return new_rulebook
+
+
 # Convenience: default rulebook
 DEFAULT_RULEBOOK = create_mathlib_rulebook()

@@ -6,13 +6,21 @@ game:
   time_limit_s: 300      # Time limit per turn (seconds)
   max_turns: 10          # Maximum number of turns before game ends
   rulebook: mathlib      # Rulebook: basic, mathlib, competition
+  
+  # Simp policy controls how the "simp" tactic can be used:
+  # - "allowed": No restrictions (default, good for beginners)
+  # - "no_auto_simp": Theorems solvable by simp alone are rejected
+  #                   (prevents "layup" theorems, forces non-trivial proposals)
+  # - "banned": simp and related tactics (aesop, decide, etc.) are removed
+  #             (hardcore mode, forces fully manual proofs)
+  simp_policy: banned
 
 # Default settings for all agents (can be overridden per-agent)
 agent_defaults:
   temperature: 0.3             # LLM temperature (0 = deterministic, 1 = creative)
   max_tokens: 1000              # Maximum tokens in LLM response
   difficulty_target: 0.4       # Target difficulty (0 = trivial, 1 = very hard)
-  max_conjecture_attempts: 3   # Retries when theorem generation fails
+  max_conjecture_attempts: 2   # Retries when theorem generation fails
 
 # Per-agent configuration (inherits from agent_defaults)
 agents:
@@ -31,5 +39,5 @@ agents:
 # Logging and debugging
 logging:
   verbose: false              # Show detailed proof steps and errors
-  show_failed_attempts: true  # Show why shot attempts failed
+  show_failed_attempts: false  # Show why shot attempts failed
   show_proof_details: false   # Show full tactic sequences
