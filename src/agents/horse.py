@@ -16,6 +16,16 @@ This mirrors real H.O.R.S.E.:
 - Opponent tries to match (make the same shot their way) → if they miss, they get a letter
 
 NO FALLBACKS. If your proof doesn't work, you missed your shot. Period.
+
+DUPLICATE STATEMENT POLICY:
+- Same statement, WITHIN a turn (retry): ALLOWED - lets agent fix proof errors
+- Same statement, ACROSS turns: BLOCKED - prevents "farming" a theorem
+- Same statement, different agent: ALLOWED - each agent proposes independently
+
+This prevents an agent from repeatedly proposing the same theorem that their
+opponent keeps failing on, encouraging variety in the game.
+
+Enforced via the optional DuplicateStatementTracker passed to the agent.
 """
 
 from __future__ import annotations
@@ -30,7 +40,7 @@ from uuid import uuid4
 if TYPE_CHECKING:
     from ..lean_repl.client import LeanREPLClient, ProofState
 
-from ..models import Shot, ProofAttempt
+from ..models import Shot, ProofAttempt, DuplicateStatementTracker
 from ..rulebook import Rulebook
 from .base import get_difficulty_guidance
 from .llm_client import LLMClient
@@ -107,18 +117,26 @@ class HorseAgent:
 
 {rulebook_section}
 
-Your task: Generate a theorem at difficulty level {difficulty:.1f}/1.0.
+Your task: Generate a NOVEL theorem at difficulty level {difficulty:.1f}/1.0.
 
 {difficulty_guidance}
+
+GAME MECHANICS:
+- You have {max_attempts} attempts to propose a valid theorem+proof
+- This is attempt {current_attempt} of {max_attempts}
+- Your opponent gets only ONE attempt to match your proof
+- Strategy: Balance difficulty - too easy and opponent matches; too hard and you might fail
+
+{already_used_section}
 
 {previous_section}
 
 Respond with JSON ONLY:
 {{
-  "name": "short_snake_case_name",
-  "statement": "forall n : Nat, n + 0 = n",
-  "tactics": ["intro n", "rfl"],
-  "reasoning": "brief explanation"
+  "name": "descriptive_snake_case_name",
+  "statement": "<your novel theorem statement here>",
+  "tactics": ["tactic1", "tactic2", "..."],
+  "reasoning": "brief explanation of why this theorem is interesting and provable"
 }}
 
 CRITICAL RULES:
@@ -126,6 +144,8 @@ CRITICAL RULES:
 - Use ASCII: Nat, Int, Real, forall (NOT Unicode symbols)
 - "tactics" must be a COMPLETE proof - all tactics needed to close all goals
 - Your tactics will be validated - if they don't compile, you MISS
+- DO NOT repeat theorems you have already used (see list above if any)
+- Be CREATIVE - propose something different from basic identities
 """
 
     # Prompt for matching a shot (defender)
@@ -137,6 +157,11 @@ Your opponent proposed this theorem. You must prove it to avoid getting a letter
 
 THEOREM TO PROVE:
 {statement}
+
+GAME MECHANICS:
+- You have exactly ONE attempt to prove this theorem
+- If your proof fails, you get a letter (H, O, R, S, or E)
+- Spell HORSE and you lose the game
 
 Respond with JSON ONLY:
 {{
@@ -157,6 +182,7 @@ CRITICAL RULES:
         llm_client: LLMClient,
         rulebook: Rulebook,
         config: HorseAgentConfig | None = None,
+        duplicate_tracker: DuplicateStatementTracker | None = None,
     ):
         """
         Initialize the agent.
@@ -166,15 +192,15 @@ CRITICAL RULES:
             llm_client: LLM for tactic suggestions
             rulebook: Available tactics/premises
             config: Agent configuration
+            duplicate_tracker: Optional shared tracker for cross-turn statement duplicates
         """
         self.repl = repl_client
         self.llm = llm_client
         self.rulebook = rulebook
         self.config = config or HorseAgentConfig()
         self.stats = AgentStats()
-
-        # Track generated theorems to avoid duplicates
-        self._generated_statements: set[str] = set()
+        # Statement duplicate tracker (shared across agents for game-level tracking)
+        self._duplicate_tracker = duplicate_tracker
 
     @property
     def name(self) -> str:
@@ -190,9 +216,9 @@ CRITICAL RULES:
         3. If valid → Shot accepted
         4. If invalid → try again (up to max_conjecture_attempts)
 
-        NOTE: Each attempt is ONE SHOT. If the proof fails, we try a
-        DIFFERENT theorem, not a different proof for the same theorem.
-        TODO: ALLOW MULTIPLE ATTEMPTS PER THEOREM TO ALLOW FOR SMALL FIXES, SHOT ATTEMPTS CONSTRASIN THE ABUSE OF THIS.
+        Duplicate Policy:
+            - Same statement, within this turn: ALLOWED (retry with different proof)
+            - Same statement, from previous turn: BLOCKED (no farming)
 
         Returns:
             A Shot with validated proof, or None if all attempts fail
@@ -202,7 +228,7 @@ CRITICAL RULES:
 
         for attempt in range(self.config.max_conjecture_attempts):
             # Step 1: Generate a theorem + proof from LLM
-            proposal = await self._generate_proposal(previous_failures)
+            proposal = await self._generate_proposal(previous_failures, current_attempt=attempt + 1)
 
             if not proposal:
                 previous_failures.append("LLM returned no proposal")
@@ -220,9 +246,14 @@ CRITICAL RULES:
                 previous_failures.append("No tactics provided")
                 continue
 
-            # Skip duplicates
-            if statement in self._generated_statements:
-                previous_failures.append(f"Duplicate: {statement[:50]}...")
+            # Check for duplicate statements across turns (game-level)
+            # This prevents "farming" the same theorem against a struggling opponent
+            if self._duplicate_tracker and self._duplicate_tracker.is_duplicate(
+                self.config.name, statement
+            ):
+                previous_failures.append(
+                    f"Duplicate statement (already used in previous turn): {statement[:50]}..."
+                )
                 continue
 
             # Step 2: Validate the proof via REPL (ONE SHOT, no fallback)
@@ -230,8 +261,9 @@ CRITICAL RULES:
             is_valid, error = await self._validate_proof(theorem_name, statement, tactics)
 
             if is_valid:
-                # Shot succeeded!
-                self._generated_statements.add(statement)
+                # Shot succeeded. Record the statement to prevent reuse across turns
+                if self._duplicate_tracker:
+                    self._duplicate_tracker.record_statement(self.config.name, statement)
                 self.stats.shots_validated += 1
                 self.stats.total_tactics_used += len(tactics)
 
@@ -273,6 +305,8 @@ CRITICAL RULES:
         - Same mechanism: propose tactics → validate → done
         - Only difference: defender doesn't propose the theorem
 
+        Note: No duplicate checking here - defender is matching, not proposing.
+
         Args:
             shot: The shot to match (from get_defender_view() - no proof visible)
 
@@ -303,6 +337,7 @@ CRITICAL RULES:
             )
 
         # Step 2: Validate the proof via REPL (ONE SHOT, no fallback)
+        # Note: No duplicate check here - defender is matching, not proposing
         defense_name = f"{shot.theorem_name}_defense_{uuid4().hex[:4]}"
         is_valid, error = await self._validate_proof(defense_name, shot.theorem_statement, tactics)
 
@@ -332,24 +367,44 @@ CRITICAL RULES:
     async def _generate_proposal(
         self,
         previous_failures: list[str],
+        current_attempt: int = 1,
     ) -> dict | None:
         """Generate a theorem + proof proposal from the LLM."""
         rulebook_section = self.rulebook.to_system_prompt()
         difficulty_guidance = get_difficulty_guidance(self.config.difficulty_target)
 
+        # Build section showing previously used statements (from successful shots)
+        already_used_section = ""
+        if self._duplicate_tracker:
+            used_statements = self._duplicate_tracker._used_statements.get(self.config.name, set())
+            if used_statements:
+                # Show the original (non-normalized) statements from history
+                history = [
+                    stmt
+                    for agent, stmt in self._duplicate_tracker._statement_history
+                    if agent == self.config.name
+                ]
+                if history:
+                    already_used_section = (
+                        "THEOREMS YOU HAVE ALREADY USED (do NOT repeat these):\n"
+                        + "\n".join(f"  - {stmt}" for stmt in history[-10:])  # Last 10
+                    )
+
+        # Build section showing failures in current turn
         previous_section = ""
         if previous_failures:
-            recent = previous_failures#[-3:]  # Show last 3 failures
-            previous_section = (
-                "Previous attempts failed:\n"
-                + "\n".join(f"  - {f}" for f in recent)
-                #+ "\n\nPlease try a DIFFERENT theorem."
+            recent = previous_failures
+            previous_section = "PREVIOUS ATTEMPTS THIS TURN (failed):\n" + "\n".join(
+                f"  - {f}" for f in recent
             )
 
         prompt = self.CONJECTURE_PROMPT.format(
             rulebook_section=rulebook_section,
             difficulty=self.config.difficulty_target,
             difficulty_guidance=difficulty_guidance,
+            max_attempts=self.config.max_conjecture_attempts,
+            current_attempt=current_attempt,
+            already_used_section=already_used_section,
             previous_section=previous_section,
         )
 

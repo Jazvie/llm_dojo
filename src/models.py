@@ -244,7 +244,6 @@ class GameState:
         return None
 
     def swap_roles(self) -> None:
-        """Swap challenger and defender roles."""
         self.current_challenger_idx, self.current_defender_idx = (
             self.current_defender_idx,
             self.current_challenger_idx,
@@ -257,10 +256,6 @@ class GameState:
 
 @dataclass
 class LeanEnvironment:
-    """
-    Represents the state of the Lean environment for an agent.
-    """
-
     file_content: str = ""
     cursor_line: int = 0
     cursor_column: int = 0
@@ -281,3 +276,92 @@ class LeanEnvironment:
 TheoremStatement = str
 TacticScript = str
 ProofTerm = str
+
+
+@dataclass
+class DuplicateStatementTracker:
+    """
+    Tracks theorem statements across turns to prevent repetitive conjectures.
+
+    This encourages variety in the game by preventing agents from:
+    - Repeatedly proposing the same theorem statement across different turns
+    - "Farming" a theorem that the opponent keeps failing on
+
+    DUPLICATE POLICY:
+        +-----------------------+-------------------+---------------------------+
+        | Scenario              | Allowed?          | Rationale                 |
+        +-----------------------+-------------------+---------------------------+
+        | Same statement,       | NO (blocked)      | Prevents farming the same |
+        | later turn            |                   | theorem against a         |
+        |                       |                   | struggling opponent       |
+        +-----------------------+-------------------+---------------------------+
+        | Same statement,       | YES               | Allows retry with         |
+        | same turn (retry)     |                   | different tactics if      |
+        |                       |                   | proof failed              |
+        +-----------------------+-------------------+---------------------------+
+        | Same statement,       | YES               | Each agent independently  |
+        | different agent       |                   | can propose theorems      |
+        +-----------------------+-------------------+---------------------------+
+
+    Key design decisions:
+    - We track theorem STATEMENTS (normalized), not proof tactics
+    - Statements are normalized (whitespace) before comparison
+    - Tracking is per-agent: Agent A's statements don't block Agent B
+    - Only successful shots are recorded (failed attempts can be retried)
+
+    Usage:
+        tracker = DuplicateStatementTracker()
+        # Inject into both agents
+        agent_a = HorseAgent(..., duplicate_tracker=tracker)
+        agent_b = HorseAgent(..., duplicate_tracker=tracker)
+    """
+
+    # Map: agent_name -> set of statement fingerprints used across turns
+    _used_statements: dict[str, set[str]] = field(default_factory=dict)
+
+    # History for debugging/analysis
+    _statement_history: list[tuple[str, str]] = field(default_factory=list)
+
+    def _normalize(self, statement: str) -> str:
+        """
+        Normalize a theorem statement for comparison.
+
+        We normalize to catch equivalent statements:
+        - Strip whitespace
+        - Normalize internal whitespace
+        """
+        # Normalize: strip, collapse whitespace
+        return " ".join(statement.split())
+
+    def is_duplicate(self, agent_name: str, statement: str) -> bool:
+        """
+        Check if this statement has been used by this agent before.
+        """
+        if agent_name not in self._used_statements:
+            return False
+
+        normalized = self._normalize(statement)
+        return normalized in self._used_statements[agent_name]
+
+    def record_statement(self, agent_name: str, statement: str) -> None:
+        """
+        Record a statement for duplicate tracking.
+
+        Should be called after a successful shot is taken.
+        """
+        if agent_name not in self._used_statements:
+            self._used_statements[agent_name] = set()
+
+        normalized = self._normalize(statement)
+        self._used_statements[agent_name].add(normalized)
+
+        # Keep history for debugging
+        self._statement_history.append((agent_name, statement))
+
+    def get_agent_statement_count(self, agent_name: str) -> int:
+        return len(self._used_statements.get(agent_name, set()))
+
+    def clear(self) -> None:
+        """Reset the tracker (for new games)."""
+        self._used_statements.clear()
+        self._statement_history.clear()

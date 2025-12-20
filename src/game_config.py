@@ -103,7 +103,7 @@ class AgentConfig:
 class LoggingConfig:
     """Logging configuration."""
 
-    verbose: bool = True  # On by default for better debugging. should be turned off later
+    verbose: bool = False
     show_failed_attempts: bool = True
     show_proof_details: bool = False
 

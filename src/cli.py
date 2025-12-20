@@ -83,6 +83,9 @@ def battle(
     temperature: float = typer.Option(
         None, "--temperature", help="LLM temperature (overrides config)"
     ),
+    max_conjecture_attempts: int = typer.Option(
+        None, "--max-attempts", help="Max conjecture attempts per shot (overrides config)"
+    ),
 ):
     """
     Run an LLM 1v1 battle grounded in Lean REPL.
@@ -129,6 +132,8 @@ def battle(
         agent_a_config.difficulty_target = difficulty
     if temperature is not None:
         agent_a_config.temperature = temperature
+    if max_conjecture_attempts is not None:
+        agent_a_config.max_conjecture_attempts = max_conjecture_attempts
 
     # Agent B config
     agent_b_config = config.get_agent_config("agent_b")
@@ -143,6 +148,8 @@ def battle(
         agent_b_config.difficulty_target = difficulty
     if temperature is not None:
         agent_b_config.temperature = temperature
+    if max_conjecture_attempts is not None:
+        agent_b_config.max_conjecture_attempts = max_conjecture_attempts
 
     # Validate REPL configuration
     if not repl_path or not lean_project:
@@ -172,10 +179,10 @@ def battle(
     console.print(f"  Project: {lean_project}")
     console.print(f"  Rulebook: {final_rulebook}")
     console.print(
-        f"  {agent_a_config.name}: {agent_a_config.model} (temp={agent_a_config.temperature}, difficulty={agent_a_config.difficulty_target})"
+        f"  {agent_a_config.name}: {agent_a_config.model} (temp={agent_a_config.temperature}, difficulty={agent_a_config.difficulty_target}, max_attempts={agent_a_config.max_conjecture_attempts})"
     )
     console.print(
-        f"  {agent_b_config.name}: {agent_b_config.model} (temp={agent_b_config.temperature}, difficulty={agent_b_config.difficulty_target})"
+        f"  {agent_b_config.name}: {agent_b_config.model} (temp={agent_b_config.temperature}, difficulty={agent_b_config.difficulty_target}, max_attempts={agent_b_config.max_conjecture_attempts})"
     )
     console.print(f"  Time limit: {final_time_limit}s per turn")
     console.print(f"  Max turns: {final_max_turns}")
@@ -219,6 +226,7 @@ async def _run_battle(
     from .agents.horse import HorseAgent, HorseAgentConfig
     from .agents.llm_client import create_llm_client
     from .game_config import AgentConfig
+    from .models import DuplicateStatementTracker
     from .rulebook import (
         create_mathlib_rulebook,
         create_basic_rulebook,
@@ -263,7 +271,7 @@ async def _run_battle(
         console.print("[dim]Make sure Lean 4 and the REPL are properly installed[/dim]")
         raise typer.Exit(1)
 
-    #TODO: ALLOW DIFFERENT URLS FOR OTHER LLMs
+    # TODO: ALLOW DIFFERENT URLS FOR OTHER LLMs
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("ANSPG_LLM_API_KEY")
     base_url = os.getenv("OPENAI_BASE_URL") or os.getenv("ANSPG_LLM_BASE_URL")
 
@@ -272,7 +280,7 @@ async def _run_battle(
         await referee.close()
         raise typer.Exit(1)
 
-    # Detect OpenRouter keys. will add more functionality later. I am just hardcoding this for now as this is what I test with.
+    # Detect OpenRouter keys
     if api_key.startswith("sk-or-") and not base_url:
         console.print("[yellow]OpenRouter key detected, setting base_url[/yellow]")
         base_url = "https://openrouter.ai/api/v1"
@@ -280,9 +288,15 @@ async def _run_battle(
     llm_a = create_llm_client(api_key=api_key, base_url=base_url, model=model_a)
     llm_b = create_llm_client(api_key=api_key, base_url=base_url, model=model_b)
 
-    # Create agents - both use the SAME REPL client (shared environment)
-    # The referee's client has Mathlib imported
+    # Create agents using referee's REPL client
     repl_client = referee._client
+
+    # Shared statement tracker prevents agents from proposing the same theorem
+    # statement across different turns (encourages variety in the game).
+    #
+    # Policy: Same statement blocked per-agent across turns.
+    # See DuplicateStatementTracker docstring for full policy details.
+    duplicate_tracker = DuplicateStatementTracker()
 
     agent_a = HorseAgent(
         repl_client=repl_client,
@@ -296,6 +310,7 @@ async def _run_battle(
             difficulty_target=agent_a_config.difficulty_target,
             max_conjecture_attempts=agent_a_config.max_conjecture_attempts,
         ),
+        duplicate_tracker=duplicate_tracker,
     )
 
     agent_b = HorseAgent(
@@ -310,6 +325,7 @@ async def _run_battle(
             difficulty_target=agent_b_config.difficulty_target,
             max_conjecture_attempts=agent_b_config.max_conjecture_attempts,
         ),
+        duplicate_tracker=duplicate_tracker,
     )
 
     # Game state
