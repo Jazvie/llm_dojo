@@ -34,21 +34,6 @@ app = typer.Typer(
 console = Console()
 
 
-def _get_repl_config() -> tuple[Path | None, Path | None]:
-    """
-    Get REPL configuration from environment variables.
-
-    Returns:
-        (repl_path, lean_project) or (None, None) if not configured
-    """
-    repl_path = os.getenv("ANSPG_REPL_PATH")
-    lean_project = os.getenv("ANSPG_LEAN_PROJECT")
-
-    if repl_path and lean_project:
-        return Path(repl_path), Path(lean_project)
-    return None, None
-
-
 @app.command("battle")
 def battle(
     repl_path: Path = typer.Option(
