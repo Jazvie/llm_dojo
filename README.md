@@ -364,6 +364,8 @@ Make sure you installed the Python package:
 pip install -e .
 ```
 
+TODO: allow for more than 2 players, handle ordering properly
+
 ## Links
 
 - [Lean 4](https://leanprover.github.io/lean4/doc/) - Theorem prover
