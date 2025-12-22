@@ -368,39 +368,11 @@ ProofTerm = str
 @dataclass
 class DuplicateStatementTracker:
     """
-    Tracks theorem statements across turns to prevent repetitive conjectures.
+    Tracks theorem statements per-agent to prevent repetitive conjectures.
 
-    This encourages variety in the game by preventing agents from:
-    - Repeatedly proposing the same theorem statement across different turns
-    - "Farming" a theorem that the opponent keeps failing on
-
-    DUPLICATE POLICY:
-        +-----------------------+-------------------+---------------------------+
-        | Scenario              | Allowed?          | Rationale                 |
-        +-----------------------+-------------------+---------------------------+
-        | Same statement,       | NO (blocked)      | Prevents farming the same |
-        | later turn            |                   | theorem against a         |
-        |                       |                   | struggling opponent       |
-        +-----------------------+-------------------+---------------------------+
-        | Same statement,       | YES               | Allows retry with         |
-        | same turn (retry)     |                   | different tactics if      |
-        |                       |                   | proof failed              |
-        +-----------------------+-------------------+---------------------------+
-        | Same statement,       | YES               | Each agent independently  |
-        | different agent       |                   | can propose theorems      |
-        +-----------------------+-------------------+---------------------------+
-
-    Key design decisions:
-    - We track theorem STATEMENTS (normalized), not proof tactics
-    - Statements are normalized (whitespace) before comparison
-    - Tracking is per-agent: Agent A's statements don't block Agent B
-    - Only successful shots are recorded (failed attempts can be retried)
-
-    Usage:
-        tracker = DuplicateStatementTracker()
-        # Inject into both agents
-        agent_a = HorseAgent(..., duplicate_tracker=tracker)
-        agent_b = HorseAgent(..., duplicate_tracker=tracker)
+    Statements are normalized (whitespace collapsed) before comparison.
+    Tracking is per-agent: Agent A's statements don't block Agent B.
+    Only successful shots are recorded (failed attempts can be retried).
     """
 
     # Map: agent_name -> set of statement fingerprints used across turns
@@ -410,14 +382,7 @@ class DuplicateStatementTracker:
     _statement_history: list[tuple[str, str]] = field(default_factory=list)
 
     def _normalize(self, statement: str) -> str:
-        """
-        Normalize a theorem statement for comparison.
-
-        We normalize to catch equivalent statements:
-        - Strip whitespace
-        - Normalize internal whitespace
-        """
-        # Normalize: strip, collapse whitespace
+        """Normalize statement by collapsing whitespace."""
         return " ".join(statement.split())
 
     def is_duplicate(self, agent_name: str, statement: str) -> bool:

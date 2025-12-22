@@ -163,24 +163,21 @@ anspg battle \
 
 ### Multi-Player Game
 
-Configure 3+ agents in your `anspg.yaml`:
+Add more agents to your `anspg.yaml`:
 
 ```yaml
-game:
-  randomize_order: true  # Shuffle initial player order
-
 agents:
-  - name: GPT-4o
+  - name: Alice
     model: gpt-4o
-  - name: Claude
+  - name: Bob
     model: claude-3-5-sonnet
-  - name: Gemini
+  - name: Charlie
     model: gemini-pro
 ```
 
-Then run:
+Use `--randomize` to shuffle the initial player order:
 ```bash
-anspg battle --randomize  # Can also enable randomization via CLI
+anspg battle --randomize
 ```
 
 ### With Explicit Paths
@@ -209,41 +206,26 @@ game:
   time_limit_s: 300
   max_turns: 10
   rulebook: mathlib
-  
-  # Multi-player options
-  randomize_order: false              # Shuffle initial player order
-  challenger_takes_letter_on_miss: false  # Traditional HORSE: no penalty for missing own shot
+  simp_policy: allowed
+  randomize_order: false
+  challenger_takes_letter_on_miss: false
 
 agent_defaults:
   temperature: 0.3
   difficulty_target: 0.4
   max_conjecture_attempts: 5
 
-# 2-player format (dict style - legacy)
 agents:
-  agent_a:
-    name: GPT-4o
+  - name: Alice
     model: gpt-4o
     temperature: 0.5
-  agent_b:
-    name: Claude
-    model: claude-3-5-sonnet-20241022
-
-# OR: Multi-player format (list style)
-# agents:
-#   - name: GPT-4o
-#     model: gpt-4o
-#   - name: Claude
-#     model: claude-3-5-sonnet
-#   - name: Gemini
-#     model: gemini-pro
+  - name: Bob
+    model: claude-3-5-sonnet
 
 logging:
   verbose: true
   show_failed_attempts: true
 ```
-
-Right now the system only allows for one BASE_URL, but this will probably be changed soon to make it easier to mix and match different models at the same time.
 
 See `anspg.example.yaml` for all options.
 

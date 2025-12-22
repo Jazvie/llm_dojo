@@ -9,7 +9,6 @@ Commands:
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from pathlib import Path
 
@@ -29,7 +28,7 @@ except ImportError:
 
 app = typer.Typer(
     name="anspg",
-    help="Adversarial Neuro-Symbolic Proving Ground - LLM 1v1 Benchmark for Lean 4",
+    help="Adversarial Neuro-Symbolic Proving Ground - LLM H.O.R.S.E. Benchmark for Lean 4",
 )
 console = Console()
 
@@ -104,52 +103,31 @@ def battle(
     """
     Run an LLM H.O.R.S.E. battle grounded in Lean REPL.
 
-    This is the core benchmark: LLMs compete in H.O.R.S.E. with
-    deterministic proof verification via the Lean REPL.
-
-    Supports 2+ players. Configure multiple agents in anspg.yaml:
+    Configure agents in anspg.yaml:
 
         agents:
-          - name: Agent-1
+          - name: Alice
             model: gpt-4o
-          - name: Agent-2
+          - name: Bob
             model: claude-3-opus
-          - name: Agent-3
-            model: gemini-pro
 
-    Example:
-        anspg battle --repl-path ./repl/.lake/build/bin/repl --lean-project ./lean_project
-
-    Or with environment variables:
-        export ANSPG_REPL_PATH=./repl/.lake/build/bin/repl
-        export ANSPG_LEAN_PROJECT=./lean_project
-        anspg battle --model-a gpt-4o --model-b claude-3-opus
+    Then run: anspg battle
     """
     from .game_config import load_config, SimpPolicy
 
     config, config_path = load_config(config_file)
+    agent_configs = config.get_agent_configs()
 
-    # Get all agent configs from config file (or defaults)
-    agent_configs = config.get_all_agent_configs()
-
-    # CLI overrides for 2-player mode (backwards compatibility)
-    if model_a is not None or name_a is not None:
-        if len(agent_configs) >= 1:
-            if model_a is not None:
-                agent_configs[0].model = model_a
-            if name_a is not None:
-                agent_configs[0].name = name_a
-            elif model_a is not None and agent_configs[0].name == "Agent":
-                agent_configs[0].name = "Agent-A"
-
-    if model_b is not None or name_b is not None:
-        if len(agent_configs) >= 2:
-            if model_b is not None:
-                agent_configs[1].model = model_b
-            if name_b is not None:
-                agent_configs[1].name = name_b
-            elif model_b is not None and agent_configs[1].name == "Agent":
-                agent_configs[1].name = "Agent-B"
+    # CLI overrides for first two agents
+    # this probabvl should be removed in favor if just specifying them in the config
+    if model_a is not None and len(agent_configs) >= 1:
+        agent_configs[0].model = model_a
+    if name_a is not None and len(agent_configs) >= 1:
+        agent_configs[0].name = name_a
+    if model_b is not None and len(agent_configs) >= 2:
+        agent_configs[1].model = model_b
+    if name_b is not None and len(agent_configs) >= 2:
+        agent_configs[1].name = name_b
 
     # Apply global CLI overrides to all agents
     for agent_config in agent_configs:
@@ -513,9 +491,7 @@ async def _run_battle(
                         f"    [{i + 1}] [cyan]{names[def_idx]}[/cyan] ({agents[def_idx].config.model})"
                     )
 
-            # ============================================================
-            # PHASE 1: Challenger takes a shot (propose + prove)
-            # ============================================================
+            # Phase 1: Challenger takes a shot (propose + prove)
             console.print(f"\n[bold]Phase 1:[/bold] {challenger_name} taking a shot...")
 
             shot = None
@@ -568,11 +544,8 @@ async def _run_battle(
                     tactics_display += f" ... (+{len(shot.challenger_proof.tactics) - 5} more)"
                 console.print(f"  Proof: [dim]{tactics_display}[/dim]")
 
-            # ============================================================
-            # PHASE 2: Each defender tries to match (in rotation order)
-            # ============================================================
+            # Phase 2: Each defender tries to match (in rotation order)
             defender_failed = False
-            failed_defender_name = None
 
             for def_idx in defenders_idx:
                 if names[def_idx] in eliminated:
@@ -628,7 +601,6 @@ async def _run_battle(
 
                     add_letter(defender_name, "failed to match")
                     defender_failed = True
-                    failed_defender_name = defender_name
                     break  # Stop checking other defenders once one fails
 
             # Determine next turn

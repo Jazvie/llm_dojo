@@ -1,11 +1,5 @@
 """
-Comprehensive configuration system for ANSPG.
-
-Supports YAML config files with:
-- Game settings (time limits, turns, rulebook)
-- Agent configurations (per-agent hyperparameters)
-- Logging settings
-- Environment variable overrides
+Configuration system for ANSPG.
 
 Config file search order:
 1. Explicit --config path
@@ -13,37 +7,11 @@ Config file search order:
 3. ~/.config/anspg/config.yaml (user config)
 4. Defaults
 
-Example anspg.yaml:
-```yaml
-game:
-  time_limit_s: 300
-  max_turns: 10
-  rulebook: mathlib
-
-agent_defaults:
-  temperature: 0.3
-  max_tokens: 500
-  difficulty_target: 0.4
-  max_conjecture_attempts: 5
-
-agents:
-  agent_a:
-    name: Agent-A
-    model: gpt-4o-mini
-    temperature: 0.5  # Override default
-  agent_b:
-    name: Agent-B
-    model: gpt-4o
-
-logging:
-  verbose: false
-  show_failed_attempts: true
-```
+See anspg.example.yaml for full configuration options.
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -97,10 +65,8 @@ class GameConfig:
     simp_policy: SimpPolicy = SimpPolicy.ALLOWED
 
     # Multi-agent H.O.R.S.E. options
-    randomize_order: bool = False  # Randomize initial player order
-    challenger_takes_letter_on_miss: bool = (
-        False  # Traditional HORSE: no letter if you miss your own shot
-    )
+    randomize_order: bool = False
+    challenger_takes_letter_on_miss: bool = False
 
 
 @dataclass
@@ -154,7 +120,7 @@ class ANSPGConfig:
 
     game: GameConfig = field(default_factory=GameConfig)
     agent_defaults: AgentConfig = field(default_factory=AgentConfig)
-    agents: dict[str, AgentConfig] = field(default_factory=dict)
+    agents: list[AgentConfig] = field(default_factory=list)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
 
     @classmethod
@@ -186,28 +152,18 @@ class ANSPGConfig:
         defaults_data = data.get("agent_defaults", {})
         agent_defaults = AgentConfig.from_dict(defaults_data) if defaults_data else AgentConfig()
 
-        # Parse per-agent configs
-        # Supports both dict format (legacy: agent_a, agent_b keys) and list format (new)
-        agents_data = data.get("agents", {})
-        agents = {}
-
-        if isinstance(agents_data, list):
-            # New list format: each item is an agent config
-            for i, agent_data in enumerate(agents_data):
-                # Use provided name or generate one
-                agent_name = agent_data.get("name", f"Agent-{i + 1}")
-                agent_id = f"agent_{i}"
-                agent_config = AgentConfig.from_dict(agent_data, defaults=agent_defaults)
-                agent_config.name = agent_name  # Ensure name is set
-                agents[agent_id] = agent_config
-        else:
-            # Legacy dict format: agent_a, agent_b keys
-            for agent_id, agent_data in agents_data.items():
-                agents[agent_id] = AgentConfig.from_dict(agent_data, defaults=agent_defaults)
+        # Parse agents list
+        agents_data = data.get("agents", [])
+        agents = []
+        for i, agent_data in enumerate(agents_data):
+            agent_config = AgentConfig.from_dict(agent_data, defaults=agent_defaults)
+            if not agent_data.get("name"):
+                agent_config.name = f"Agent{i + 1}"
+            agents.append(agent_config)
 
         # Parse logging config
         logging_data = data.get("logging", {})
-        logging = LoggingConfig(
+        logging_config = LoggingConfig(
             verbose=logging_data.get("verbose", False),
             show_failed_attempts=logging_data.get("show_failed_attempts", True),
             show_proof_details=logging_data.get("show_proof_details", False),
@@ -217,7 +173,7 @@ class ANSPGConfig:
             game=game,
             agent_defaults=agent_defaults,
             agents=agents,
-            logging=logging,
+            logging=logging_config,
         )
 
     def to_yaml(self, path: Path) -> None:
@@ -240,8 +196,8 @@ class ANSPGConfig:
                 "difficulty_target": self.agent_defaults.difficulty_target,
                 "max_conjecture_attempts": self.agent_defaults.max_conjecture_attempts,
             },
-            "agents": {
-                agent_id: {
+            "agents": [
+                {
                     "name": agent.name,
                     "model": agent.model,
                     "temperature": agent.temperature,
@@ -249,8 +205,8 @@ class ANSPGConfig:
                     "difficulty_target": agent.difficulty_target,
                     "max_conjecture_attempts": agent.max_conjecture_attempts,
                 }
-                for agent_id, agent in self.agents.items()
-            },
+                for agent in self.agents
+            ],
             "logging": {
                 "verbose": self.logging.verbose,
                 "show_failed_attempts": self.logging.show_failed_attempts,
@@ -261,54 +217,25 @@ class ANSPGConfig:
         with open(path, "w") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
-    def get_agent_config(self, agent_id: str) -> AgentConfig:
-        """Get config for a specific agent, falling back to defaults.
-
-        Always returns a COPY to avoid mutation issues when CLI flags override values.
-        """
-        from copy import deepcopy
-
-        if agent_id in self.agents:
-            return deepcopy(self.agents[agent_id])
-        return deepcopy(self.agent_defaults)
-
-    def get_all_agent_configs(self) -> list[AgentConfig]:
-        """Get all agent configs as a list, in order.
-
-        If no agents are defined, returns two default agents (Agent-A, Agent-B).
-        Always returns COPIES to avoid mutation issues.
-        """
+    def get_agent_configs(self) -> list[AgentConfig]:
+        """Get all agent configs. Returns copies to avoid mutation issues."""
         from copy import deepcopy
 
         if not self.agents:
-            # Default to two agents if none specified
             return [
-                AgentConfig(name="Agent-A", model=self.agent_defaults.model),
-                AgentConfig(name="Agent-B", model=self.agent_defaults.model),
+                AgentConfig(name="Alice", model=self.agent_defaults.model),
+                AgentConfig(name="Bob", model=self.agent_defaults.model),
             ]
-
-        # Return agents in order (sorted by agent_id for consistency)
-        sorted_ids = sorted(self.agents.keys())
-        return [deepcopy(self.agents[agent_id]) for agent_id in sorted_ids]
+        return [deepcopy(agent) for agent in self.agents]
 
 
 def find_config_file() -> Path | None:
-    """
-    Find config file in standard locations.
-
-    Search order:
-    1. ./anspg.yaml (current directory)
-    2. ~/.config/anspg/config.yaml (user config)
-    3. None (use defaults)
-    """
-    # Current directory
+    """Find config file in ./anspg.yaml or ~/.config/anspg/config.yaml."""
     local_config = Path("anspg.yaml")
     if local_config.exists():
         return local_config
 
-    # User config directory
-    user_config_dir = Path.home() / ".config" / "anspg"
-    user_config = user_config_dir / "config.yaml"
+    user_config = Path.home() / ".config" / "anspg" / "config.yaml"
     if user_config.exists():
         return user_config
 
@@ -316,39 +243,22 @@ def find_config_file() -> Path | None:
 
 
 def load_config(path: Path | None = None) -> tuple[ANSPGConfig, Path | None]:
-    """
-    Load configuration from file or defaults.
-
-    Args:
-        path: Explicit config file path (optional)
-
-    Returns:
-        Tuple of (ANSPGConfig instance, path that was loaded or None if defaults)
-    """
+    """Load configuration from file or use defaults."""
     if path is not None:
         return ANSPGConfig.from_yaml(path), path
 
-    # Try to find config file
     found_path = find_config_file()
     if found_path:
         return ANSPGConfig.from_yaml(found_path), found_path
 
-    # Use defaults
     return ANSPGConfig(), None
 
 
 def create_default_config(path: Path) -> None:
     """Create a default config file at the given path."""
     config = ANSPGConfig()
-
-    # Add example agents
-    config.agents["agent_a"] = AgentConfig(
-        name="Agent-A",
-        model="gpt-4o-mini",
-    )
-    config.agents["agent_b"] = AgentConfig(
-        name="Agent-B",
-        model="gpt-4o-mini",
-    )
-
+    config.agents = [
+        AgentConfig(name="Alice", model="gpt-4o-mini"),
+        AgentConfig(name="Bob", model="gpt-4o-mini"),
+    ]
     config.to_yaml(path)
