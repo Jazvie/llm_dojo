@@ -32,18 +32,18 @@ agent_defaults:
   temperature: 0.3
   
   # Maximum tokens in LLM response
-  max_tokens: 1000
+  max_tokens: 2000
   
   # Target theorem difficulty (0 = trivial, 1 = very hard)
   difficulty_target: 0.4
   
-  # Attempts to generate a valid conjecture before giving up
-  max_conjecture_attempts: 2
+  # Attempts to generate a valid conjecture. allows for greater complexity, but heavily favors the conjecturer.
+  max_conjecture_attempts: 1
 
 # List of agents (2 or more)
 agents:
   - name: Alice
-    model: openai/gpt-4o
+    model: qwen/qwen3-next-80b-a3b-instruct
   
   - name: Bob
     model: mistralai/mistral-small-24b-instruct-2501
