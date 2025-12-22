@@ -151,11 +151,12 @@ anspg battle
 ```
 
 ### With CLI Flags (2-Player)
+This CLI flag will probabily be removed later in favor of the more flexible config with more agents
 
 ```bash
 anspg battle \
-  --model-a gpt-4o \
-  --model-b gpt-4o-mini \
+  --model-a openai/gpt-oss-20b \
+  --model-b z-ai/glm-4-32b \
   --difficulty 0.5 \
   --temperature 0.3 \
   --turns 10
@@ -168,11 +169,11 @@ Add more agents to your `anspg.yaml`:
 ```yaml
 agents:
   - name: Alice
-    model: gpt-4o
+    model: qwen/qwen3-next-80b-a3b-instruct
   - name: Bob
-    model: claude-3-5-sonnet
+    model: openai/gpt-oss-20b
   - name: Charlie
-    model: gemini-pro
+    model: z-ai/glm-4-32b
 ```
 
 Use `--randomize` to shuffle the initial player order:
