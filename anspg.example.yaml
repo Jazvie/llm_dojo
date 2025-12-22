@@ -14,15 +14,48 @@ game:
   # - "banned": simp and related tactics (aesop, decide, etc.) are removed
   #             (hardcore mode, forces fully manual proofs)
   simp_policy: banned
+  
+  # Multi-player H.O.R.S.E. options
+  # 
+  # Randomize the initial player order (who goes first, second, etc.)
+  # Set to true for fair tournament play
+  randomize_order: false
+  
+  # Traditional HORSE rules: if you miss your own shot, you don't get a letter.
+  # Set to true if you want challengers to receive letters when they fail
+  # to prove their own conjectures.
+  # Default (false) follows basketball HORSE rules where missing your own
+  # shot just passes the ball to the next player.
+  challenger_takes_letter_on_miss: false
 
 # Default settings for all agents (can be overridden per-agent)
 agent_defaults:
   temperature: 0.3             # LLM temperature (0 = deterministic, 1 = creative)
-  max_tokens: 1000              # Maximum tokens in LLM response
+  max_tokens: 1000             # Maximum tokens in LLM response
   difficulty_target: 0.4       # Target difficulty (0 = trivial, 1 = very hard)
   max_conjecture_attempts: 2   # Retries when theorem generation fails
 
-# Per-agent configuration (inherits from agent_defaults)
+# Per-agent configuration
+# 
+# You can use either dict format (legacy, for 2 players):
+#   agents:
+#     agent_a:
+#       name: Player-1
+#       model: gpt-4o
+#     agent_b:
+#       name: Player-2
+#       model: claude-3-opus
+#
+# Or list format (new, for N players):
+#   agents:
+#     - name: Player-1
+#       model: gpt-4o
+#     - name: Player-2
+#       model: claude-3-opus
+#     - name: Player-3
+#       model: gemini-pro
+
+# Example: 2-player game (dict format)
 agents:
   agent_a:
     name: GPT-OSS-20B
@@ -36,8 +69,23 @@ agents:
     model: mistralai/mistral-small-24b-instruct-2501
     # Uses agent_defaults for other settings
 
+# Example: 3-player game (list format) - uncomment to use
+# agents:
+#   - name: GPT-4o
+#     model: openai/gpt-4o
+#     temperature: 0.3
+#     difficulty_target: 0.4
+#   
+#   - name: Claude-Sonnet
+#     model: anthropic/claude-3.5-sonnet
+#     temperature: 0.4
+#   
+#   - name: Gemini-Pro
+#     model: google/gemini-pro
+#     difficulty_target: 0.5
+
 # Logging and debugging
 logging:
   verbose: false              # Show detailed proof steps and errors
-  show_failed_attempts: false  # Show why shot attempts failed
+  show_failed_attempts: false # Show why shot attempts failed
   show_proof_details: false   # Show full tactic sequences

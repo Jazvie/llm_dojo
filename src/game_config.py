@@ -96,6 +96,12 @@ class GameConfig:
     rulebook: str = "mathlib"
     simp_policy: SimpPolicy = SimpPolicy.ALLOWED
 
+    # Multi-agent H.O.R.S.E. options
+    randomize_order: bool = False  # Randomize initial player order
+    challenger_takes_letter_on_miss: bool = (
+        False  # Traditional HORSE: no letter if you miss your own shot
+    )
+
 
 @dataclass
 class AgentConfig:
@@ -172,6 +178,8 @@ class ANSPGConfig:
             max_turns=game_data.get("max_turns", 10),
             rulebook=game_data.get("rulebook", "mathlib"),
             simp_policy=SimpPolicy.from_string(game_data.get("simp_policy")),
+            randomize_order=game_data.get("randomize_order", False),
+            challenger_takes_letter_on_miss=game_data.get("challenger_takes_letter_on_miss", False),
         )
 
         # Parse agent defaults
@@ -179,10 +187,23 @@ class ANSPGConfig:
         agent_defaults = AgentConfig.from_dict(defaults_data) if defaults_data else AgentConfig()
 
         # Parse per-agent configs
+        # Supports both dict format (legacy: agent_a, agent_b keys) and list format (new)
         agents_data = data.get("agents", {})
         agents = {}
-        for agent_id, agent_data in agents_data.items():
-            agents[agent_id] = AgentConfig.from_dict(agent_data, defaults=agent_defaults)
+
+        if isinstance(agents_data, list):
+            # New list format: each item is an agent config
+            for i, agent_data in enumerate(agents_data):
+                # Use provided name or generate one
+                agent_name = agent_data.get("name", f"Agent-{i + 1}")
+                agent_id = f"agent_{i}"
+                agent_config = AgentConfig.from_dict(agent_data, defaults=agent_defaults)
+                agent_config.name = agent_name  # Ensure name is set
+                agents[agent_id] = agent_config
+        else:
+            # Legacy dict format: agent_a, agent_b keys
+            for agent_id, agent_data in agents_data.items():
+                agents[agent_id] = AgentConfig.from_dict(agent_data, defaults=agent_defaults)
 
         # Parse logging config
         logging_data = data.get("logging", {})
@@ -210,6 +231,8 @@ class ANSPGConfig:
                 "max_turns": self.game.max_turns,
                 "rulebook": self.game.rulebook,
                 "simp_policy": self.game.simp_policy.value,
+                "randomize_order": self.game.randomize_order,
+                "challenger_takes_letter_on_miss": self.game.challenger_takes_letter_on_miss,
             },
             "agent_defaults": {
                 "temperature": self.agent_defaults.temperature,
@@ -248,6 +271,25 @@ class ANSPGConfig:
         if agent_id in self.agents:
             return deepcopy(self.agents[agent_id])
         return deepcopy(self.agent_defaults)
+
+    def get_all_agent_configs(self) -> list[AgentConfig]:
+        """Get all agent configs as a list, in order.
+
+        If no agents are defined, returns two default agents (Agent-A, Agent-B).
+        Always returns COPIES to avoid mutation issues.
+        """
+        from copy import deepcopy
+
+        if not self.agents:
+            # Default to two agents if none specified
+            return [
+                AgentConfig(name="Agent-A", model=self.agent_defaults.model),
+                AgentConfig(name="Agent-B", model=self.agent_defaults.model),
+            ]
+
+        # Return agents in order (sorted by agent_id for consistency)
+        sorted_ids = sorted(self.agents.keys())
+        return [deepcopy(self.agents[agent_id]) for agent_id in sorted_ids]
 
 
 def find_config_file() -> Path | None:

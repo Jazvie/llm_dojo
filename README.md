@@ -3,7 +3,7 @@
 
 # ANSPG - Adversarial Neuro-Symbolic Proving Ground
 
-A H.O.R.S.E.-style theorem proving game where two AI agents compete by proposing and solving Lean 4 theorems, with deterministic verification via the Lean REPL.
+A H.O.R.S.E.-style theorem proving game where AI agents compete by proposing and solving Lean 4 theorems, with deterministic verification via the Lean REPL. Supports 2 or more players.
 
 ## Overview
 
@@ -16,16 +16,25 @@ This is a CLI benchmark for comparing LLM math reasoning via Lean-grounded verif
 
 ## Game Rules
 
-Two agents take turns as Challenger and Defender:
+Agents take turns in rotation as Challenger and Defenders:
 
 1. **Challenger** proposes a theorem with a proof
 2. **System** verifies the challenger's proof via Lean REPL
-3. **Defender** sees only the theorem statement (not the proof) and must prove it independently
+3. **Defenders** (all other players, in rotation order) see only the theorem statement and must prove it independently
 4. **Scoring**:
-   - If challenger's proof is invalid → challenger gets a letter
-   - If defender fails to prove → defender gets a letter
-   - If defender succeeds → roles swap
-5. First agent to spell **H-O-R-S-E** loses
+   - If challenger's proof is invalid → ball passes to next player (traditional HORSE rules)
+   - If a defender fails to prove → that defender gets a letter, challenger shoots again
+   - If all defenders succeed → ball passes to next player
+5. First agent to spell **H-O-R-S-E** is eliminated
+6. Last agent standing wins
+
+### Multi-Player Flow
+
+In a game with 3+ players, the rotation works like real HORSE:
+- Player 1 (challenger) makes a shot
+- Players 2, 3, ... (defenders) each try to match in order
+- First defender to miss gets a letter; challenger keeps the ball
+- If all defenders match, ball passes to Player 2 (who becomes challenger)
 
 ### Key Design: Statement Sanitizer
 
@@ -38,15 +47,17 @@ Both challenger and defender use the **same validation mechanism**:
 2. REPL validates in one shot
 3. If valid → success; if invalid → MISS
 
-Note this differs a bit from a traditional game of horse as normally this doesn't count as a miss. Currently we allow for multiple attempts by the proposer, the number can be configured, and I'll probably add the ability for this to not penalize later. The reason I penalize currently is because it possibly causes a deadlock if two LLMs can't solve their own proof. Realistically humans can get into pretty long cold streaks in H.O.R.S.E, but I would rather not spend all of my credits in this loop while debugging.
+By default, this follows traditional HORSE rules where missing your own shot doesn't give you a letter—the ball just passes. You can change this behavior with `challenger_takes_letter_on_miss: true` in the config if you want challengers penalized for failed conjectures.
+
+The challenger gets multiple attempts (configurable via `max_conjecture_attempts`) to generate a valid theorem+proof, but the defender only gets one shot to match.
 
 ## Architecture
 
 ```
-LLM Agent A  <->  REPL Referee  <->  LLM Agent B
-      |               |                   |
-   Generate      Verify via              Solve
-   theorems    Lean execution          theorems
+LLM Agent 1  <->  REPL Referee  <->  LLM Agent 2  <->  ...  <->  LLM Agent N
+      |               |                   |                          |
+   Generate      Verify via              Solve                      Solve
+   theorems    Lean execution          theorems                   theorems
 ```
 
 LeanDojo requires theorems to exist in a pre-traced repository which may be a little slow so ultimately we don't use it here.
@@ -139,7 +150,7 @@ cp anspg.example.yaml anspg.yaml
 anspg battle
 ```
 
-### With CLI Flags
+### With CLI Flags (2-Player)
 
 ```bash
 anspg battle \
@@ -148,6 +159,28 @@ anspg battle \
   --difficulty 0.5 \
   --temperature 0.3 \
   --turns 10
+```
+
+### Multi-Player Game
+
+Configure 3+ agents in your `anspg.yaml`:
+
+```yaml
+game:
+  randomize_order: true  # Shuffle initial player order
+
+agents:
+  - name: GPT-4o
+    model: gpt-4o
+  - name: Claude
+    model: claude-3-5-sonnet
+  - name: Gemini
+    model: gemini-pro
+```
+
+Then run:
+```bash
+anspg battle --randomize  # Can also enable randomization via CLI
 ```
 
 ### With Explicit Paths
@@ -176,12 +209,17 @@ game:
   time_limit_s: 300
   max_turns: 10
   rulebook: mathlib
+  
+  # Multi-player options
+  randomize_order: false              # Shuffle initial player order
+  challenger_takes_letter_on_miss: false  # Traditional HORSE: no penalty for missing own shot
 
 agent_defaults:
   temperature: 0.3
   difficulty_target: 0.4
   max_conjecture_attempts: 5
 
+# 2-player format (dict style - legacy)
 agents:
   agent_a:
     name: GPT-4o
@@ -191,10 +229,20 @@ agents:
     name: Claude
     model: claude-3-5-sonnet-20241022
 
+# OR: Multi-player format (list style)
+# agents:
+#   - name: GPT-4o
+#     model: gpt-4o
+#   - name: Claude
+#     model: claude-3-5-sonnet
+#   - name: Gemini
+#     model: gemini-pro
+
 logging:
   verbose: true
   show_failed_attempts: true
 ```
+
 Right now the system only allows for one BASE_URL, but this will probably be changed soon to make it easier to mix and match different models at the same time.
 
 See `anspg.example.yaml` for all options.
@@ -215,12 +263,14 @@ See `anspg.example.yaml` for all options.
 | `--config` / `-c` | Path to YAML config file |
 | `--repl-path` | Path to REPL (overrides env var) |
 | `--lean-project` | Path to Lean project (overrides env var) |
-| `--model-a` / `--model-b` | LLM models (override config) |
+| `--model-a` / `--model-b` | LLM models for 2-player mode (override config) |
 | `--difficulty` / `-d` | Difficulty target 0-1 (override config) |
 | `--temperature` | LLM temperature (override config) |
 | `--turns` / `-n` | Maximum number of turns (override config) |
 | `--time-limit` / `-t` | Seconds per turn (override config) |
 | `--verbose` / `-v` | Show detailed logging (override config) |
+| `--randomize` | Randomize initial player order |
+| `--challenger-takes-letter` | Challenger gets letter if they miss their own shot |
 
 ### OpenRouter Support
 
@@ -363,8 +413,6 @@ Make sure you installed the Python package:
 ```bash
 pip install -e .
 ```
-
-TODO: allow for more than 2 players, handle ordering properly
 
 ## Links
 

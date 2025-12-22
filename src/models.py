@@ -192,12 +192,25 @@ class TurnResult:
 class GameState:
     """
     Complete state of an H.O.R.S.E. game.
+
+    Supports N-player rotation where:
+    - Players are arranged in a circular order
+    - The challenger proposes a theorem
+    - All other players (defenders) try to match in rotation order
+    - First defender to fail gets a letter
+    - Ball passes according to game rules
     """
 
     id: UUID = field(default_factory=uuid4)
 
     # Players
     agents: list[AgentState] = field(default_factory=list)
+
+    # Rotation order (indices into agents list)
+    # This is the "line" of players - first is challenger, rest are defenders in order
+    rotation_order: list[int] = field(default_factory=list)
+
+    # For 2-player backwards compatibility
     current_challenger_idx: int = 0
     current_defender_idx: int = 1
 
@@ -216,6 +229,78 @@ class GameState:
     started_at: datetime | None = None
     ended_at: datetime | None = None
 
+    def initialize_rotation(self, randomize: bool = False) -> None:
+        """Initialize the rotation order.
+
+        Args:
+            randomize: If True, shuffle the order randomly
+        """
+        import random
+
+        self.rotation_order = list(range(len(self.agents)))
+        if randomize:
+            random.shuffle(self.rotation_order)
+
+        # Set initial challenger/defender for backwards compatibility
+        if len(self.rotation_order) >= 1:
+            self.current_challenger_idx = self.rotation_order[0]
+        if len(self.rotation_order) >= 2:
+            self.current_defender_idx = self.rotation_order[1]
+
+        # Update roles
+        self._update_roles()
+
+    def _update_roles(self) -> None:
+        """Update agent roles based on current rotation."""
+        for i, agent in enumerate(self.agents):
+            if i == self.current_challenger_idx:
+                agent.role = AgentRole.CHALLENGER
+            elif i == self.current_defender_idx:
+                agent.role = AgentRole.DEFENDER
+            else:
+                agent.role = AgentRole.SPECTATOR
+
+    def get_active_defenders(self) -> list[int]:
+        """Get indices of all defenders (non-eliminated, non-challenger) in rotation order."""
+        challenger_pos = self.rotation_order.index(self.current_challenger_idx)
+        defenders = []
+        n = len(self.rotation_order)
+
+        for i in range(1, n):
+            idx = self.rotation_order[(challenger_pos + i) % n]
+            if not self.agents[idx].is_eliminated:
+                defenders.append(idx)
+
+        return defenders
+
+    def advance_rotation(self) -> None:
+        """Advance the rotation: next player in line becomes challenger."""
+        if not self.rotation_order:
+            return
+
+        # Find current challenger position in rotation
+        current_pos = self.rotation_order.index(self.current_challenger_idx)
+        n = len(self.rotation_order)
+
+        # Find next non-eliminated player
+        for i in range(1, n + 1):
+            next_pos = (current_pos + i) % n
+            next_idx = self.rotation_order[next_pos]
+            if not self.agents[next_idx].is_eliminated:
+                self.current_challenger_idx = next_idx
+                break
+
+        # Set defender as next non-eliminated player after challenger
+        challenger_pos = self.rotation_order.index(self.current_challenger_idx)
+        for i in range(1, n + 1):
+            next_pos = (challenger_pos + i) % n
+            next_idx = self.rotation_order[next_pos]
+            if not self.agents[next_idx].is_eliminated and next_idx != self.current_challenger_idx:
+                self.current_defender_idx = next_idx
+                break
+
+        self._update_roles()
+
     @property
     def challenger(self) -> AgentState | None:
         if self.agents and 0 <= self.current_challenger_idx < len(self.agents):
@@ -229,10 +314,14 @@ class GameState:
         return None
 
     @property
+    def active_player_count(self) -> int:
+        """Number of non-eliminated players."""
+        return sum(1 for agent in self.agents if not agent.is_eliminated)
+
+    @property
     def is_game_over(self) -> bool:
-        return self.phase == GamePhase.GAME_OVER or any(
-            agent.is_eliminated for agent in self.agents
-        )
+        # Game over when only 1 player remains (or phase is set to GAME_OVER)
+        return self.phase == GamePhase.GAME_OVER or self.active_player_count <= 1
 
     @property
     def winner(self) -> AgentState | None:
@@ -244,14 +333,12 @@ class GameState:
         return None
 
     def swap_roles(self) -> None:
+        """Legacy 2-player role swap. For N-player, use advance_rotation()."""
         self.current_challenger_idx, self.current_defender_idx = (
             self.current_defender_idx,
             self.current_challenger_idx,
         )
-        if self.challenger:
-            self.challenger.role = AgentRole.CHALLENGER
-        if self.defender:
-            self.defender.role = AgentRole.DEFENDER
+        self._update_roles()
 
 
 @dataclass
