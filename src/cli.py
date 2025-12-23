@@ -53,14 +53,6 @@ def battle(
         "-c",
         help="Path to YAML config file (defaults to anspg.yaml if exists)",
     ),
-    model_a: str = typer.Option(
-        None, "--model-a", "-a", help="Model for agent A (overrides config, for 2-player mode)"
-    ),
-    model_b: str = typer.Option(
-        None, "--model-b", "-b", help="Model for agent B (overrides config, for 2-player mode)"
-    ),
-    name_a: str = typer.Option(None, "--name-a", help="Name for agent A (overrides config)"),
-    name_b: str = typer.Option(None, "--name-b", help="Name for agent B (overrides config)"),
     rulebook: str = typer.Option(
         None,
         "--rulebook",
@@ -117,17 +109,6 @@ def battle(
 
     config, config_path = load_config(config_file)
     agent_configs = config.get_agent_configs()
-
-    # CLI overrides for first two agents
-    # this probabvl should be removed in favor if just specifying them in the config
-    if model_a is not None and len(agent_configs) >= 1:
-        agent_configs[0].model = model_a
-    if name_a is not None and len(agent_configs) >= 1:
-        agent_configs[0].name = name_a
-    if model_b is not None and len(agent_configs) >= 2:
-        agent_configs[1].model = model_b
-    if name_b is not None and len(agent_configs) >= 2:
-        agent_configs[1].name = name_b
 
     # Apply global CLI overrides to all agents
     for agent_config in agent_configs:

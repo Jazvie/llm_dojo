@@ -44,15 +44,15 @@ class SimpPolicy(Enum):
 
     @classmethod
     def from_string(cls, value: str | None) -> SimpPolicy:
-        """Parse from string, defaulting to ALLOWED."""
+        """Parse from string, defaulting to ALLOWED if None."""
         if value is None:
             return cls.ALLOWED
         value_lower = value.lower().replace("-", "_")
         for policy in cls:
             if policy.value == value_lower:
                 return policy
-        # Fallback to ALLOWED if unrecognized
-        return cls.ALLOWED
+        valid_options = ", ".join(p.value for p in cls)
+        raise ValueError(f"Invalid simp_policy '{value}'. Valid options: {valid_options}")
 
 
 @dataclass
@@ -221,11 +221,11 @@ class ANSPGConfig:
         """Get all agent configs. Returns copies to avoid mutation issues."""
         from copy import deepcopy
 
-        if not self.agents:
-            return [
-                AgentConfig(name="Alice", model=self.agent_defaults.model),
-                AgentConfig(name="Bob", model=self.agent_defaults.model),
-            ]
+        if len(self.agents) < 2:
+            raise ValueError(
+                "At least 2 agents must be configured. "
+                "See anspg.example.yaml for configuration format."
+            )
         return [deepcopy(agent) for agent in self.agents]
 
 

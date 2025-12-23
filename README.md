@@ -60,8 +60,6 @@ LLM Agent 1  <->  REPL Referee  <->  LLM Agent 2  <->  ...  <->  LLM Agent N
    theorems    Lean execution          theorems                   theorems
 ```
 
-LeanDojo requires theorems to exist in a pre-traced repository which may be a little slow so ultimately we don't use it here.
-
 The REPL provides:
 - **Inject Syntax**: Submit arbitrary theorem strings and receive immediate feedback
 - **Maintain State**: Persist defined theorems for subsequent proof steps

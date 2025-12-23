@@ -32,10 +32,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..lean_repl.client import LeanREPLClient, ProofState
@@ -496,7 +499,8 @@ CRITICAL RULES:
             content = response.choices[0].message.content or ""
             return self._extract_json(content)
 
-        except Exception:
+        except Exception as e:
+            logger.warning("LLM query failed: %s", e)
             return None
 
     def _extract_json(self, content: str) -> dict | None:

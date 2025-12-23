@@ -1,8 +1,7 @@
 """
 REPL-based Referee for ANSPG H.O.R.S.E. game.
 
-This is the REAL referee that uses the Lean REPL for dynamic theorem verification.
-Unlike LeanDojo (which requires traced repos), this can verify arbitrary new theorems.
+Uses the Lean REPL for dynamic theorem verification.
 
 Key capabilities:
 - Validate dynamically generated theorems
@@ -54,9 +53,6 @@ class REPLValidationResult:
 class REPLReferee:
     """
     Deterministic referee using Lean REPL for proof verification.
-
-    This is the ground truth for the H.O.R.S.E. game when using dynamic
-    theorem generation (which LeanDojo cannot handle).
 
     Responsibilities:
     - Verify arbitrary new theorems by executing them in Lean

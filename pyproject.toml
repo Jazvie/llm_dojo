@@ -11,8 +11,6 @@ authors = [
 keywords = ["lean4", "theorem-proving", "adversarial", "repl", "llm", "benchmark"]
 
 dependencies = [
-    # LeanDojo - Optional for static repo analysis (REPL is primary for dynamic verification)
-    # "lean-dojo>=1.7.0",
     # LLM clients
     "openai>=1.12.0",
     "anthropic>=0.18.0",

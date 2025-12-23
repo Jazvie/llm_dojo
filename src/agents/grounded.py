@@ -18,8 +18,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..lean_repl.client import LeanREPLClient, ProofState, TacticResult as REPLTacticResult
@@ -530,7 +533,8 @@ Please provide a corrected proof. Respond with JSON:
             content = response.choices[0].message.content or ""
             return self._extract_json(content)
 
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to generate proposal: %s", e)
             return None
 
     async def _repair_proposal(
@@ -565,7 +569,8 @@ Please provide a corrected proof. Respond with JSON:
 
             return None
 
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to repair proposal: %s", e)
             return None
 
     async def _validate_proof(
