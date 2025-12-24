@@ -417,3 +417,85 @@ class DuplicateStatementTracker:
         """Reset the tracker (for new games)."""
         self._used_statements.clear()
         self._statement_history.clear()
+
+
+@dataclass
+class GameStateView:
+    """
+    Read-only view of game state for agent decision-making.
+
+    This provides agents with situational awareness without exposing
+    internal game mechanics. Used to populate prompt context sections.
+    """
+
+    # Current standings: agent_name -> letters accumulated (e.g., "HOR")
+    standings: dict[str, str] = field(default_factory=dict)
+
+    # Current turn number
+    turn_number: int = 0
+
+    # For defenders: who proposed the current theorem
+    challenger_name: str | None = None
+
+    # The agent's own letters (convenience)
+    my_letters: str = ""
+
+    # The agent's own name (for self-reference)
+    my_name: str = ""
+
+    def to_prompt_section(self, include_challenger: bool = True) -> str:
+        """
+        Generate a prompt section describing the current game state.
+
+        Args:
+            include_challenger: Whether to include who proposed the theorem
+
+        Returns:
+            Formatted string for inclusion in prompts
+        """
+        lines = ["CURRENT GAME STATE:"]
+        lines.append(f"  Turn: {self.turn_number}")
+
+        # Show standings with lives remaining
+        for name, letters in self.standings.items():
+            lives_remaining = 5 - len(letters)
+            letter_display = letters if letters else "(none)"
+            is_me = " (you)" if name == self.my_name else ""
+            lines.append(f"  {name}{is_me}: {letter_display} - {lives_remaining} lives left")
+
+        # Show challenger info for defenders
+        if include_challenger and self.challenger_name:
+            lines.append(f"  Theorem proposed by: {self.challenger_name}")
+
+        return "\n".join(lines)
+
+    @classmethod
+    def from_game_state(
+        cls,
+        game_state: "GameState",
+        agent_name: str,
+        challenger_name: str | None = None,
+    ) -> "GameStateView":
+        """
+        Create a view from the full game state.
+
+        Args:
+            game_state: The full GameState object
+            agent_name: Name of the agent receiving this view
+            challenger_name: Name of the challenger (for defender context)
+        """
+        standings = {}
+        my_letters = ""
+
+        for agent in game_state.agents:
+            standings[agent.name] = agent.letters
+            if agent.name == agent_name:
+                my_letters = agent.letters
+
+        return cls(
+            standings=standings,
+            turn_number=game_state.turn_number,
+            challenger_name=challenger_name,
+            my_letters=my_letters,
+            my_name=agent_name,
+        )

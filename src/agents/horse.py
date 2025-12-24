@@ -43,9 +43,9 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ..lean_repl.client import LeanREPLClient, ProofState
 
-from ..models import Shot, ProofAttempt, DuplicateStatementTracker
+from ..models import Shot, ProofAttempt, DuplicateStatementTracker, GameStateView
 from ..rulebook import Rulebook
-from ..game_config import SimpPolicy
+from ..game_config import SimpPolicy, PromptContext
 from .base import get_difficulty_guidance
 from .llm_client import LLMClient
 
@@ -67,6 +67,9 @@ class HorseAgentConfig:
 
     # Simp policy (game-level setting passed down)
     simp_policy: SimpPolicy = SimpPolicy.ALLOWED
+
+    # Prompt context settings (controls what info agent receives)
+    prompt_context: PromptContext = field(default_factory=PromptContext)
 
 
 @dataclass
@@ -127,7 +130,7 @@ class HorseAgent:
 Your task: Generate a NOVEL theorem at difficulty level {difficulty:.1f}/1.0.
 
 {difficulty_guidance}
-
+{game_state_section}
 GAME MECHANICS:
 - You have {max_attempts} attempts to propose a valid theorem+proof
 - This is attempt {current_attempt} of {max_attempts}
@@ -159,7 +162,7 @@ CRITICAL RULES:
     MATCH_PROMPT = """You are a Lean 4 mathematician defending in a H.O.R.S.E. competition.
 
 {rulebook_section}
-
+{game_state_section}
 Your opponent proposed this theorem. You must prove it to avoid getting a letter.
 
 THEOREM TO PROVE:
@@ -208,10 +211,24 @@ CRITICAL RULES:
         self.stats = AgentStats()
         # Statement duplicate tracker (shared across agents for game-level tracking)
         self._duplicate_tracker = duplicate_tracker
+        # Game state view (set before each action via set_game_state)
+        self._game_state_view: GameStateView | None = None
 
     @property
     def name(self) -> str:
         return self.config.name
+
+    def set_game_state(self, game_state_view: GameStateView) -> None:
+        """
+        Set the current game state view before taking an action.
+
+        Should be called before take_shot() or match_shot() to provide
+        the agent with current standings and context.
+
+        Args:
+            game_state_view: Read-only view of current game state
+        """
+        self._game_state_view = game_state_view
 
     async def take_shot(self) -> Shot | None:
         """
@@ -258,9 +275,14 @@ CRITICAL RULES:
             if self._duplicate_tracker and self._duplicate_tracker.is_duplicate(
                 self.config.name, statement
             ):
-                previous_failures.append(
-                    f"Duplicate statement (already used in previous turn): {statement[:50]}..."
-                )
+                if self.config.prompt_context.show_full_errors:
+                    previous_failures.append(
+                        f"Duplicate statement (already used in previous turn): {statement}"
+                    )
+                else:
+                    previous_failures.append(
+                        f"Duplicate statement (already used in previous turn): {statement[:50]}..."
+                    )
                 continue
 
             # Step 2: Validate the proof via REPL (ONE SHOT, no fallback)
@@ -274,9 +296,14 @@ CRITICAL RULES:
                     trivial_name = f"trivial_check_{uuid4().hex[:4]}"
                     is_trivial, _ = await self._validate_proof(trivial_name, statement, ["simp"])
                     if is_trivial:
-                        previous_failures.append(
-                            f"Theorem too trivial (solvable by 'simp' alone): {statement[:50]}..."
-                        )
+                        if self.config.prompt_context.show_full_errors:
+                            previous_failures.append(
+                                f"Theorem too trivial (solvable by 'simp' alone): {statement}"
+                            )
+                        else:
+                            previous_failures.append(
+                                f"Theorem too trivial (solvable by 'simp' alone): {statement[:50]}..."
+                            )
                         continue
 
                 # Shot succeeded. Record the statement to prevent reuse across turns
@@ -298,8 +325,17 @@ CRITICAL RULES:
                     source="llm_generated",
                 )
             else:
-                # Shot missed - record failure and try a DIFFERENT theorem
-                previous_failures.append(f"Proof failed for '{statement[:40]}...': {error}")
+                # Shot missed - record failure with full details for learning
+                if self.config.prompt_context.show_full_errors:
+                    failure_msg = (
+                        f"FAILED ATTEMPT:\n"
+                        f"  Statement: {statement}\n"
+                        f"  Tactics: {tactics}\n"
+                        f"  Error: {error}"
+                    )
+                else:
+                    failure_msg = f"Proof failed for '{statement[:40]}...': {error}"
+                previous_failures.append(failure_msg)
 
         # All attempts exhausted - record for debugging
         self.stats.last_failure_reason = (
@@ -391,6 +427,13 @@ CRITICAL RULES:
         rulebook_section = self.rulebook.to_system_prompt()
         difficulty_guidance = get_difficulty_guidance(self.config.difficulty_target)
 
+        # Build game state section based on prompt context settings
+        game_state_section = ""
+        if self.config.prompt_context.show_game_state and self._game_state_view:
+            game_state_section = "\n" + self._game_state_view.to_prompt_section(
+                include_challenger=False  # Challenger doesn't need to see "proposed by"
+            ) + "\n"
+
         # Build section showing previously used statements (from successful shots)
         already_used_section = ""
         if self._duplicate_tracker:
@@ -420,6 +463,7 @@ CRITICAL RULES:
             rulebook_section=rulebook_section,
             difficulty=self.config.difficulty_target,
             difficulty_guidance=difficulty_guidance,
+            game_state_section=game_state_section,
             max_attempts=self.config.max_conjecture_attempts,
             current_attempt=current_attempt,
             already_used_section=already_used_section,
@@ -432,8 +476,18 @@ CRITICAL RULES:
         """Generate a proof for matching a shot."""
         rulebook_section = self.rulebook.to_system_prompt()
 
+        # Build game state section based on prompt context settings
+        game_state_section = ""
+        if self.config.prompt_context.show_game_state and self._game_state_view:
+            # For defenders, include challenger name if configured
+            include_challenger = self.config.prompt_context.show_challenger_name
+            game_state_section = "\n" + self._game_state_view.to_prompt_section(
+                include_challenger=include_challenger
+            ) + "\n"
+
         prompt = self.MATCH_PROMPT.format(
             rulebook_section=rulebook_section,
+            game_state_section=game_state_section,
             statement=shot.theorem_statement,
         )
 
