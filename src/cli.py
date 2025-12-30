@@ -2,7 +2,7 @@
 CLI for ANSPG - Adversarial Neuro-Symbolic Proving Ground.
 
 Commands:
-- anspg battle: Run LLM 1v1 benchmark with Lean REPL grounding
+- anspg battle: Run LLM H.O.R.S.E. battle with Lean REPL grounding
 - anspg init: Initialize a new project
 """
 

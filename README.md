@@ -148,21 +148,9 @@ cp anspg.example.yaml anspg.yaml
 anspg battle
 ```
 
-### With CLI Flags (2-Player)
-This CLI flag will probabily be removed later in favor of the more flexible config with more agents
+### Configure Agents
 
-```bash
-anspg battle \
-  --model-a openai/gpt-oss-20b \
-  --model-b z-ai/glm-4-32b \
-  --difficulty 0.5 \
-  --temperature 0.3 \
-  --turns 10
-```
-
-### Multi-Player Game
-
-Add more agents to your `anspg.yaml`:
+Add agents to your `anspg.yaml`:
 
 ```yaml
 agents:
@@ -239,17 +227,21 @@ See `anspg.example.yaml` for all options.
 
 ### CLI Options
 
+All options override values from the YAML config file. Agents must be configured in YAML.
+
 | Option | Description |
 |--------|-------------|
 | `--config` / `-c` | Path to YAML config file |
 | `--repl-path` | Path to REPL (overrides env var) |
 | `--lean-project` | Path to Lean project (overrides env var) |
-| `--model-a` / `--model-b` | LLM models for 2-player mode (override config) |
-| `--difficulty` / `-d` | Difficulty target 0-1 (override config) |
-| `--temperature` | LLM temperature (override config) |
-| `--turns` / `-n` | Maximum number of turns (override config) |
-| `--time-limit` / `-t` | Seconds per turn (override config) |
-| `--verbose` / `-v` | Show detailed logging (override config) |
+| `--rulebook` / `-r` | Rulebook preset: basic, mathlib, competition |
+| `--difficulty` / `-d` | Difficulty target 0-1 (applies to all agents) |
+| `--temperature` | LLM temperature (applies to all agents) |
+| `--max-attempts` | Max conjecture attempts per shot |
+| `--turns` / `-n` | Maximum number of turns |
+| `--time-limit` / `-t` | Seconds per turn |
+| `--simp-policy` / `-s` | Simp policy: allowed, no_auto_simp, banned |
+| `--verbose` / `-v` | Show detailed logging |
 | `--randomize` | Randomize initial player order |
 | `--challenger-takes-letter` | Challenger gets letter if they miss their own shot |
 
