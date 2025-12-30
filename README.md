@@ -400,6 +400,3 @@ pip install -e .
 - [Lean 4](https://leanprover.github.io/lean4/doc/) - Theorem prover
 - [leanprover-community/repl](https://github.com/leanprover-community/repl) - Lean REPL
 - [Pantograph](https://github.com/lenianiva/Pantograph) - Advanced REPL interface
-
-TODO: provide better context to agents on each turn
-
