@@ -67,9 +67,10 @@ agents:
   # - name: Diana
   #   model: anthropic/claude-3-sonnet
   #   prompt_context:
-  #     show_game_state: true        # Show standings and lives remaining
-  #     show_challenger_name: false  # Defender doesn't see who proposed theorem
-  #     show_full_errors: true       # Full error messages (not truncated)
+  #     show_game_state: true          # Show standings and lives remaining
+  #     show_challenger_name: false    # Defender doesn't see who proposed theorem
+  #     show_full_errors: true         # Full error messages (not truncated)
+  #     show_lean4_syntax_guide: true  # Include Lean 4 syntax cheat sheet (helps models trained on Lean 3)
 
 logging:
   # Show detailed proof steps and errors

@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 from ..models import Shot, ProofAttempt, DuplicateStatementTracker, GameStateView
 from ..rulebook import Rulebook
-from ..game_config import SimpPolicy, PromptContext
+from ..game_config import SimpPolicy, PromptContext, LEAN4_SYNTAX_GUIDE
 from .base import get_difficulty_guidance
 from .llm_client import LLMClient
 
@@ -126,6 +126,7 @@ class HorseAgent:
     CONJECTURE_PROMPT = """You are a Lean 4 mathematician in a H.O.R.S.E. proving competition.
 
 {rulebook_section}
+{lean4_syntax_section}
 {game_state_section}
 Your task: Generate a NOVEL theorem at difficulty level {difficulty:.1f}/1.0.
 
@@ -162,6 +163,7 @@ CRITICAL RULES:
     MATCH_PROMPT = """You are a Lean 4 mathematician defending in a H.O.R.S.E. competition.
 
 {rulebook_section}
+{lean4_syntax_section}
 {game_state_section}
 Your opponent proposed this theorem. You must prove it to avoid getting a letter.
 
@@ -418,6 +420,12 @@ CRITICAL RULES:
         rulebook_section = self.rulebook.to_system_prompt()
         difficulty_guidance = get_difficulty_guidance(self.config.difficulty_target)
 
+        # Build Lean 4 syntax guide section if enabled
+        lean4_syntax_section = ""
+        if self.config.prompt_context.show_lean4_syntax_guide:
+            lean4_syntax_section = "\n" + LEAN4_SYNTAX_GUIDE
+
+        # Build game state section if enabled
         game_state_section = ""
         if self.config.prompt_context.show_game_state and self._game_state_view:
             game_state_section = (
@@ -450,6 +458,7 @@ CRITICAL RULES:
 
         prompt = self.CONJECTURE_PROMPT.format(
             rulebook_section=rulebook_section,
+            lean4_syntax_section=lean4_syntax_section,
             game_state_section=game_state_section,
             difficulty=self.config.difficulty_target,
             difficulty_guidance=difficulty_guidance,
@@ -465,6 +474,12 @@ CRITICAL RULES:
         """Generate a proof for matching a shot."""
         rulebook_section = self.rulebook.to_system_prompt()
 
+        # Build Lean 4 syntax guide section if enabled
+        lean4_syntax_section = ""
+        if self.config.prompt_context.show_lean4_syntax_guide:
+            lean4_syntax_section = "\n" + LEAN4_SYNTAX_GUIDE
+
+        # Build game state section if enabled
         game_state_section = ""
         if self.config.prompt_context.show_game_state and self._game_state_view:
             game_state_section = (
@@ -477,6 +492,7 @@ CRITICAL RULES:
 
         prompt = self.MATCH_PROMPT.format(
             rulebook_section=rulebook_section,
+            lean4_syntax_section=lean4_syntax_section,
             game_state_section=game_state_section,
             statement=shot.theorem_statement,
         )

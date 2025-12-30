@@ -55,21 +55,46 @@ class SimpPolicy(Enum):
         raise ValueError(f"Invalid simp_policy '{value}'. Valid options: {valid_options}")
 
 
+# Lean 4 syntax cheat sheet for agents trained on Lean 3 data
+LEAN4_SYNTAX_GUIDE = """LEAN 4 SYNTAX (STRICT - Lean 3 syntax will NOT compile):
+- Lambdas: `fun x => x + 1` (NOT `fun x, x + 1` - no commas!)
+- Tactics: Separate with newlines or `;` (NOT commas between tactics)
+- Rewrites: `rw [lemma]` (brackets mandatory, NOT `rw lemma`)
+- Induction: `induction n with | zero => tactic | succ d hd => tactic`
+  (NOT `induction n with d hd` - must use `| case =>` syntax)
+- Types: PascalCase (`Nat`, `List`), functions: camelCase (`List.map`)
+- FORBIDDEN: `include`, `omit`, `begin...end` (these are Lean 3 only)
+"""
+
+
 @dataclass
 class PromptContext:
     """Controls what context information is provided to an agent in prompts."""
 
+    # Show current standings (who has which letters, lives remaining)
     show_game_state: bool = True
+
+    # Defender sees who proposed the theorem
     show_challenger_name: bool = True
+
+    # Show full error messages (statement + tactics + error) vs truncated
     show_full_errors: bool = True
+
+    # Include Lean 4 syntax cheat sheet (helps models trained on Lean 3)
+    show_lean4_syntax_guide: bool = True
 
     @classmethod
     def from_profile(cls, profile: str) -> "PromptContext":
         """Create PromptContext from a named profile."""
         profiles = {
-            "standard": cls(),
+            "standard": cls(),  # All enabled (default)
             "minimal": cls(show_game_state=False, show_challenger_name=False),
-            "blind": cls(show_game_state=False, show_challenger_name=False, show_full_errors=False),
+            "blind": cls(
+                show_game_state=False,
+                show_challenger_name=False,
+                show_full_errors=False,
+                show_lean4_syntax_guide=False,
+            ),
         }
         if profile not in profiles:
             valid = ", ".join(profiles.keys())
@@ -83,6 +108,7 @@ class PromptContext:
             show_game_state=data.get("show_game_state", True),
             show_challenger_name=data.get("show_challenger_name", True),
             show_full_errors=data.get("show_full_errors", True),
+            show_lean4_syntax_guide=data.get("show_lean4_syntax_guide", True),
         )
 
 
@@ -264,6 +290,7 @@ class ANSPGConfig:
                     "show_game_state": agent._prompt_context.show_game_state,
                     "show_challenger_name": agent._prompt_context.show_challenger_name,
                     "show_full_errors": agent._prompt_context.show_full_errors,
+                    "show_lean4_syntax_guide": agent._prompt_context.show_lean4_syntax_guide,
                 }
             return d
 
