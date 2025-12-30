@@ -56,6 +56,37 @@ class SimpPolicy(Enum):
 
 
 @dataclass
+class PromptContext:
+    """Controls what context information is provided to an agent in prompts."""
+
+    show_game_state: bool = True
+    show_challenger_name: bool = True
+    show_full_errors: bool = True
+
+    @classmethod
+    def from_profile(cls, profile: str) -> "PromptContext":
+        """Create PromptContext from a named profile."""
+        profiles = {
+            "standard": cls(),
+            "minimal": cls(show_game_state=False, show_challenger_name=False),
+            "blind": cls(show_game_state=False, show_challenger_name=False, show_full_errors=False),
+        }
+        if profile not in profiles:
+            valid = ", ".join(profiles.keys())
+            raise ValueError(f"Invalid prompt_profile '{profile}'. Valid options: {valid}")
+        return profiles[profile]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "PromptContext":
+        """Create PromptContext from a dictionary."""
+        return cls(
+            show_game_state=data.get("show_game_state", True),
+            show_challenger_name=data.get("show_challenger_name", True),
+            show_full_errors=data.get("show_full_errors", True),
+        )
+
+
+@dataclass
 class GameConfig:
     """Game-level configuration."""
 
@@ -84,6 +115,17 @@ class AgentConfig:
     difficulty_target: float = 0.4  # 0 = trivial, 1 = very hard
     max_conjecture_attempts: int = 3  # Retries for generating valid theorems
 
+    prompt_profile: str | None = None
+    _prompt_context: PromptContext | None = field(default=None, repr=False)
+
+    def get_prompt_context(self) -> PromptContext:
+        """Get the effective PromptContext for this agent."""
+        if self._prompt_context is not None:
+            return self._prompt_context
+        if self.prompt_profile is not None:
+            return PromptContext.from_profile(self.prompt_profile)
+        return PromptContext()  # Default: all enabled
+
     @classmethod
     def from_dict(cls, data: dict[str, Any], defaults: AgentConfig | None = None) -> AgentConfig:
         """Create AgentConfig from dict, using defaults for missing values."""
@@ -98,11 +140,35 @@ class AgentConfig:
                 "max_conjecture_attempts": data.get(
                     "max_conjecture_attempts", defaults.max_conjecture_attempts
                 ),
+                "prompt_profile": data.get("prompt_profile", defaults.prompt_profile),
             }
         else:
-            config_dict = data
+            config_dict = {
+                "name": data.get("name", "Agent"),
+                "model": data.get("model", "gpt-4o-mini"),
+                "temperature": data.get("temperature", 0.3),
+                "max_tokens": data.get("max_tokens", 500),
+                "difficulty_target": data.get("difficulty_target", 0.4),
+                "max_conjecture_attempts": data.get("max_conjecture_attempts", 3),
+                "prompt_profile": data.get("prompt_profile"),
+            }
 
-        return cls(**{k: v for k, v in config_dict.items() if k in cls.__dataclass_fields__})
+        # Handle prompt_context as a nested dict for fine-grained control
+        prompt_context_data = data.get("prompt_context")
+        agent = cls(
+            name=config_dict["name"],
+            model=config_dict["model"],
+            temperature=config_dict["temperature"],
+            max_tokens=config_dict["max_tokens"],
+            difficulty_target=config_dict["difficulty_target"],
+            max_conjecture_attempts=config_dict["max_conjecture_attempts"],
+            prompt_profile=config_dict["prompt_profile"],
+        )
+
+        if prompt_context_data and isinstance(prompt_context_data, dict):
+            agent._prompt_context = PromptContext.from_dict(prompt_context_data)
+
+        return agent
 
 
 @dataclass
@@ -181,6 +247,26 @@ class ANSPGConfig:
         if yaml is None:
             raise ImportError("PyYAML is required. Install with: pip install pyyaml")
 
+        def agent_to_dict(agent: AgentConfig) -> dict[str, Any]:
+            """Convert an AgentConfig to a dictionary for YAML serialization."""
+            d: dict[str, Any] = {
+                "name": agent.name,
+                "model": agent.model,
+                "temperature": agent.temperature,
+                "max_tokens": agent.max_tokens,
+                "difficulty_target": agent.difficulty_target,
+                "max_conjecture_attempts": agent.max_conjecture_attempts,
+            }
+            if agent.prompt_profile:
+                d["prompt_profile"] = agent.prompt_profile
+            if agent._prompt_context:
+                d["prompt_context"] = {
+                    "show_game_state": agent._prompt_context.show_game_state,
+                    "show_challenger_name": agent._prompt_context.show_challenger_name,
+                    "show_full_errors": agent._prompt_context.show_full_errors,
+                }
+            return d
+
         data = {
             "game": {
                 "time_limit_s": self.game.time_limit_s,
@@ -196,17 +282,7 @@ class ANSPGConfig:
                 "difficulty_target": self.agent_defaults.difficulty_target,
                 "max_conjecture_attempts": self.agent_defaults.max_conjecture_attempts,
             },
-            "agents": [
-                {
-                    "name": agent.name,
-                    "model": agent.model,
-                    "temperature": agent.temperature,
-                    "max_tokens": agent.max_tokens,
-                    "difficulty_target": agent.difficulty_target,
-                    "max_conjecture_attempts": agent.max_conjecture_attempts,
-                }
-                for agent in self.agents
-            ],
+            "agents": [agent_to_dict(agent) for agent in self.agents],
             "logging": {
                 "verbose": self.logging.verbose,
                 "show_failed_attempts": self.logging.show_failed_attempts,

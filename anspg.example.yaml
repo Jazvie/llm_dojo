@@ -39,6 +39,12 @@ agent_defaults:
   
   # Attempts to generate a valid conjecture. allows for greater complexity, but heavily favors the conjecturer.
   max_conjecture_attempts: 1
+  
+  # Prompt context profile (optional). Presets for what info agents receive:
+  #   standard - all context enabled (default)
+  #   minimal  - no game state, no challenger name
+  #   blind    - no context at all (research baseline)
+  # prompt_profile: standard
 
 # List of agents (2 or more)
 agents:
@@ -50,10 +56,20 @@ agents:
     # Override defaults for this agent:
     temperature: 0.5
     difficulty_target: 0.6
-  
+    
   - name: Charlie
     model: openai/gpt-oss-20b
     max_conjecture_attempts: 3
+    # Use minimal context profile (no game state shown)
+    prompt_profile: minimal
+  
+  # Example: Fine-grained prompt context control
+  # - name: Diana
+  #   model: anthropic/claude-3-sonnet
+  #   prompt_context:
+  #     show_game_state: true        # Show standings and lives remaining
+  #     show_challenger_name: false  # Defender doesn't see who proposed theorem
+  #     show_full_errors: true       # Full error messages (not truncated)
 
 logging:
   # Show detailed proof steps and errors

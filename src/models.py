@@ -417,3 +417,32 @@ class DuplicateStatementTracker:
         """Reset the tracker (for new games)."""
         self._used_statements.clear()
         self._statement_history.clear()
+
+
+@dataclass
+class GameStateView:
+    """Read-only view of game state for agent decision-making."""
+
+    standings: dict[str, str] = field(default_factory=dict)
+    turn_number: int = 0
+    challenger_name: str | None = None
+    my_letters: str = ""
+    my_name: str = ""
+
+    def to_prompt_section(self, include_challenger: bool = True) -> str:
+        """Generate a prompt section describing the current game state."""
+        lines = ["CURRENT GAME STATE:"]
+        lines.append(f"  Turn: {self.turn_number}")
+
+        # Show standings for all players
+        for name, letters in self.standings.items():
+            remaining = 5 - len(letters)
+            letters_display = letters if letters else "(none)"
+            marker = " (you)" if name == self.my_name else ""
+            lines.append(f"  {name}{marker}: {letters_display} ({remaining} lives left)")
+
+        # Show who proposed the theorem (for defenders)
+        if include_challenger and self.challenger_name:
+            lines.append(f"  This theorem was proposed by: {self.challenger_name}")
+
+        return "\n".join(lines)

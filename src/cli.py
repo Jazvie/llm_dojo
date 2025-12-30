@@ -218,26 +218,13 @@ async def _run_battle(
     randomize_order: bool = False,
     challenger_takes_letter_on_miss: bool = False,
 ):
-    """
-    Run an N-player LLM battle with Lean REPL grounding.
-
-    Game Flow (H.O.R.S.E. style with N players):
-    1. Challenger takes a shot: proposes theorem AND proves it
-    2. If challenger_takes_letter_on_miss is True and challenger fails:
-       - Challenger gets a letter, ball passes to next player
-    3. If challenger succeeds, each defender (in rotation order) tries to match:
-       - First defender to fail gets a letter
-       - Challenger shoots again
-    4. If all defenders match, ball passes to next player
-    5. Players are eliminated when they spell H-O-R-S-E
-    6. Last player standing wins
-    """
+    """Run an N-player LLM battle with Lean REPL grounding."""
     import random
     from .orchestrator.repl_referee import REPLReferee
     from .agents.horse import HorseAgent, HorseAgentConfig
     from .agents.llm_client import create_llm_client
     from .game_config import SimpPolicy
-    from .models import DuplicateStatementTracker
+    from .models import DuplicateStatementTracker, GameStateView
     from .rulebook import (
         create_mathlib_rulebook,
         create_basic_rulebook,
@@ -332,6 +319,7 @@ async def _run_battle(
                 difficulty_target=cfg.difficulty_target,
                 max_conjecture_attempts=cfg.max_conjecture_attempts,
                 simp_policy=simp_policy,
+                prompt_context=cfg.get_prompt_context(),
             ),
             duplicate_tracker=duplicate_tracker,
         )
@@ -434,6 +422,19 @@ async def _run_battle(
             return letter
         return ""
 
+    def build_game_state_view(
+        agent_name: str,
+        turn_num: int,
+        challenger_name: str | None = None,
+    ) -> GameStateView:
+        return GameStateView(
+            standings=dict(scores),
+            turn_number=turn_num,
+            challenger_name=challenger_name,
+            my_letters=scores.get(agent_name, ""),
+            my_name=agent_name,
+        )
+
     display_scores()
 
     # Main game loop
@@ -474,6 +475,11 @@ async def _run_battle(
 
             # Phase 1: Challenger takes a shot (propose + prove)
             console.print(f"\n[bold]Phase 1:[/bold] {challenger_name} taking a shot...")
+
+            # Set game state context for challenger
+            challenger.set_game_state(
+                build_game_state_view(challenger_name, turn, challenger_name=None)
+            )
 
             shot = None
             try:
@@ -540,6 +546,11 @@ async def _run_battle(
                 # CRITICAL: Defender sees only the theorem (Statement Sanitizer)
                 defender_shot = shot.get_defender_view()
                 console.print(f"  [dim](Defender sees only the statement, not the proof)[/dim]")
+
+                # Set game state context for defender (includes who proposed the theorem)
+                defender.set_game_state(
+                    build_game_state_view(defender_name, turn, challenger_name=challenger_name)
+                )
 
                 defense_result = None
                 try:
