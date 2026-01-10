@@ -387,6 +387,8 @@ Make sure you installed the Python package:
 pip install -e .
 ```
 
+### TODO: Pantograph considerations. Further options regarding provided context
+
 ## Links
 
 - [Lean 4](https://leanprover.github.io/lean4/doc/) - Theorem prover
